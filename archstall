@@ -1,0 +1,140 @@
+#!/bin/bash
+
+#
+# Archstall Arch Linux installer made by PowerMan2206.
+#
+
+clear
+
+# write the package list
+cat > packages <<EOF
+base
+base-devel
+linux
+linux-firmware
+man-db
+nano
+
+EOF
+
+echo "Archstall Arch Linux installer v0.1"
+echo "This script comes with no warranty, screwing up your system is your fault"
+echo "You can cancel the script at any time with Ctrl+C"
+echo ""
+echo "Press any key to continue..."
+read
+
+# check the boot mode
+if [[ -d /sys/firmware/efi/efivars ]]; then
+	boot="uefi"
+	echo "System booted in UEFI mode"
+else
+	boot="bios"
+	echo "System booted in BIOS mode"
+fi
+
+# set the system clock and wait a bit for the messages
+echo "Ensuring the system clock is accurate..."
+timedatectl set-ntp true; sleep 2
+
+echo ""
+
+# automatic or manual disk partitioning?
+echo "(A)utomatic or (M)anual disk partitioning?"
+read partitioning 
+echo ""
+
+# actual partitioning
+if [[ $partitioning == "A" || $partitioning == "a" ]]; then
+	echo "Select the disk you want to use (not a partition!)"
+	echo ""
+	lsblk
+	echo ""
+	read disk
+	echo ""
+	echo "WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK!"
+	echo "Are you sure you want to continue? You can cancel with Ctrl+C"
+	read
+	if [[ $boot == "uefi" ]]; then
+	
+		echo "Making the EFI partition..."
+		parted /dev/$disk mklabel gpt "EFI partition" 1MiB 512MiB
+		mkfs.fat -F32 /dev/${disk}1
+		parted /dev/$disk set 1 esp on
+		
+		echo "Making the root partition..."
+		parted /dev/$disk mkpart "root partition" 512MiB 100%
+		mkfs.ext4 /dev/${disk}2
+
+	elif [[ $boot == "bios" ]]; then
+
+		echo "Making the root partition..."
+		parted /dev/$disk mklabel msdos
+		parted /dev/$disk mkpart primary 1MiB 100%
+		mkfs.ext4 /dev/${disk}1
+		parted /dev/$disk set 1 boot on
+
+	fi
+
+# shut
+elif [[ $partitioning == "M" || $partitioning == "m" ]]; then
+	echo "Uh, yeah. I'm working on it. Use automatic for now."
+	exit
+
+fi
+
+# mount the partition/s
+if [[ $boot == "uefi" ]]; then
+	mount /dev/${disk}2 /mnt
+	mkdir /mnt/efi
+	mount /dev/${disk}1 /mnt/efi
+
+elif [[ $boot == "bios" ]]; then
+	mount /dev/${disk}1 /mnt
+
+fi
+
+clear
+
+echo "Add packages which you want to the packages file"
+echo "(the ones already there are basically must-haves)"
+echo ""
+echo "Press any key to edit with nano..."
+read
+nano packages
+
+# read the package list and install those packages
+echo "Installing the packages with pacstrap..."
+pacstrap /mnt - < packages 
+
+# make the fstab
+echo "Generating the fstab..."
+genfstab -U /mnt >> /mnt/etc/fstab
+
+# downloading the second script from GitHub and preparing stuff
+echo "Downloading the second script..."
+curl https://raw.githubusercontent.com/PowerMan2206/archstall/master/archstall2 > /mnt/archstall2
+chmod +x /mnt/archstall2
+echo $boot > /mnt/bootmode
+echo $disk > /mnt/diskthing
+echo ""
+
+clear
+
+# chroot in and run the second script
+arch-chroot /mnt /bin/bash -c "su - -c /archstall2"
+
+# cleanup
+rm /mnt/archstall2 /mnt/bootmode /mnt/diskthing
+
+# unmount the filesystems
+echo "Unmounting the filesystems..."
+umount -R /mnt 
+
+clear
+
+# reboot
+echo "Installation finished! Pull out your installation"
+echo "media and press any key to reboot..."
+read
+reboot
