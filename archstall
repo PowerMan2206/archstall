@@ -134,7 +134,7 @@ umount -R /mnt
 clear
 
 # reboot
-echo "Installation finished! Pull out your installation"
-echo "media and press any key to reboot..."
+echo "Installation finished!"
+echo "Press any key to reboot..."
 read
 reboot
