@@ -62,17 +62,25 @@ if [[ $partitioning == "A" || $partitioning == "a" ]]; then
 		mkfs.fat -F32 /dev/${disk}1
 		parted /dev/$disk set 1 esp on
 		
+		echo "Making swap..."
+		parted /dev/$dism mkpart "swap" 512MiB 4GiB
+		mkswap /dev/$disk2
+		swapon /dev/$disk2
 		echo "Making the root partition..."
-		parted /dev/$disk mkpart "root partition" 512MiB 100%
-		mkfs.ext4 /dev/${disk}2
+		parted /dev/$disk mkpart "root partition" 4iGB 100%
+		mkfs.ext4 /dev/${disk}3
 
 	elif [[ $boot == "bios" ]]; then
 
-		echo "Making the root partition..."
+                echo "making swap"
 		parted /dev/$disk mklabel msdos
-		parted /dev/$disk mkpart primary 1MiB 100%
-		mkfs.ext4 /dev/${disk}1
-		parted /dev/$disk set 1 boot on
+		parted /dev/$disk mkpart primary 1MiB 4GiB
+		swapon /dev/$disk1
+		
+		echo "Making the root partition..."
+		parted /dev/$disk mkpart primary 4GiB 100%
+		mkfs.ext4 /dev/${disk}2
+		parted /dev/$disk set 2 boot on
 
 	fi
 
@@ -130,7 +138,6 @@ rm /mnt/archstall2 /mnt/bootmode /mnt/diskthing
 # unmount the filesystems
 echo "Unmounting the filesystems..."
 umount -R /mnt 
-
 clear
 
 # reboot
