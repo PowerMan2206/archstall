@@ -88,8 +88,6 @@ if [[ $network == "y" || $network == "" ]]; then
 	echo "DHCP=yes" >> /etc/systemd/network/20-wired.network
 fi
 
-echo ""
-
 # swapfile
 read -p "Want a Swapfile? [y] " swap
 echo ""

@@ -6,8 +6,7 @@ To use the script, just run
 
 ```
 curl https://raw.githubusercontent.com/PowerMan2206/archstall/master/archstall > archstall
-chmod +x archstall
-./archstall
+bash archstall
 ```
 
 from a booted Arch live environment. It'll download the script, make it executable, and run it. Follow the instructions and you're golden.

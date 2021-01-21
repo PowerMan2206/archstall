@@ -64,12 +64,12 @@ if [[ $partitioning == "automatic" || $partitioning == "a" || $partitioning == "
 		parted /dev/$disk mklabel gpt
 
 		echo "Making the EFI partition..."
-		parted /dev/$disk mkpart "EFI partition" 1MiB 512MiB
+		parted /dev/$disk mkpart P1 1MiB 512MiB
 		mkfs.fat -F32 /dev/${disk}1
 		parted /dev/$disk set 1 esp on
 		
 		echo "Making the root partition..."
-		parted /dev/$disk mkpart "root partition" 512MiB 100%
+		parted /dev/$disk mkpart P2 512MiB 100%
 		mkfs.ext4 /dev/${disk}2
 
 	elif [[ $boot == "bios" ]]; then
