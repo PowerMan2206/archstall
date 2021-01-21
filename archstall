@@ -1,28 +1,35 @@
 #!/bin/bash
 
 #
-# Archstall Arch Linux installer made by PowerMan2206.
+# Archstall v0.2 Arch Linux installer made by PowerMan2206.
 #
 
 clear
 
 # write the package list
 cat > packages <<EOF
+# coreutils and shit, basic commands
 base
+# fakeroot and stuff, needed for AUR helpers
 base-devel
+# the kernel and firmware
 linux
+#linux-lts
 linux-firmware
+# manpages
 man-db
+# text editor
 nano
+#vim
 
 EOF
 
-echo "Archstall Arch Linux installer v0.1"
+echo "Archstall Arch Linux installer v0.2"
 echo "This script comes with no warranty, screwing up your system is your fault"
 echo "You can cancel the script at any time with Ctrl+C"
 echo ""
-echo "Press any key to continue..."
-read
+read -p "Press any key to continue... "
+echo ""
 
 # check the boot mode
 if [[ -d /sys/firmware/efi/efivars ]]; then
@@ -40,25 +47,24 @@ timedatectl set-ntp true; sleep 2
 echo ""
 
 # automatic or manual disk partitioning?
-echo "(A)utomatic or (M)anual disk partitioning?"
-read partitioning 
+read -p "(a)utomatic or (m)anual disk partitioning? [automatic] " partitioning 
 echo ""
 
 # actual partitioning
-if [[ $partitioning == "A" || $partitioning == "a" ]]; then
-	echo "Select the disk you want to use (not a partition!)"
-	echo ""
+if [[ $partitioning == "automatic" || $partitioning == "a" || $partitioning == "" ]]; then
 	lsblk
 	echo ""
-	read disk
+	read -p "Select the disk you want to use (not a partition!) " disk
 	echo ""
 	echo "WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK!"
-	echo "Are you sure you want to continue? You can cancel with Ctrl+C"
-	read
-	if [[ $boot == "uefi" ]]; then
+	read -p "Are you sure you want to continue? You can cancel with Ctrl+C "
+	echo ""
 	
+	if [[ $boot == "uefi" ]]; then
+		parted /dev/$disk mklabel gpt
+
 		echo "Making the EFI partition..."
-		parted /dev/$disk mklabel gpt "EFI partition" 1MiB 512MiB
+		parted /dev/$disk mkpart "EFI partition" 1MiB 512MiB
 		mkfs.fat -F32 /dev/${disk}1
 		parted /dev/$disk set 1 esp on
 		
@@ -68,8 +74,8 @@ if [[ $partitioning == "A" || $partitioning == "a" ]]; then
 
 	elif [[ $boot == "bios" ]]; then
 
-		echo "Making the root partition..."
 		parted /dev/$disk mklabel msdos
+		echo "Making the root partition..."
 		parted /dev/$disk mkpart primary 1MiB 100%
 		mkfs.ext4 /dev/${disk}1
 		parted /dev/$disk set 1 boot on
@@ -77,7 +83,7 @@ if [[ $partitioning == "A" || $partitioning == "a" ]]; then
 	fi
 
 # shut
-elif [[ $partitioning == "M" || $partitioning == "m" ]]; then
+elif [[ $partitioning == "manual" || $partitioning == "m" ]]; then
 	echo "Uh, yeah. I'm working on it. Use automatic for now."
 	exit
 
@@ -96,16 +102,27 @@ fi
 
 clear
 
+# edit package list
 echo "Add packages which you want to the packages file"
 echo "(the ones already there are basically must-haves)"
 echo ""
-echo "Press any key to edit with nano..."
-read
-nano packages
+read -p "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
+echo ""
+
+if [[ $editor == "n" || $editor == "" ]]; then
+	nano packages
+elif [[ $editor == "v" ]]; then
+	vim packages
+else:
+	echo "Skipping package list editing..."
+fi
 
 # read the package list and install those packages
 echo "Installing the packages with pacstrap..."
-pacstrap /mnt - < packages 
+# take the packages list and get rid of the comments
+cat packages | grep -v "#" > packagesclean
+# actual installing
+pacstrap /mnt - < packagesclean
 
 # make the fstab
 echo "Generating the fstab..."
@@ -135,6 +152,5 @@ clear
 
 # reboot
 echo "Installation finished!"
-echo "Press any key to reboot..."
-read
+read -p "Press any key to reboot... "
 reboot

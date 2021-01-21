@@ -1,7 +1,7 @@
 #!/bin/bash
 
 #
-# Archstall2 Arch Linux installer made by PowerMan2206.
+# Archstall2 v0.2 Arch Linux installer made by PowerMan2206.
 # Meant to be run through the other script, don't run on it's own
 #
 
@@ -10,11 +10,10 @@ boot=`cat /bootmode`
 disk=`cat /diskthing`
 
 # select timezone region
-echo "Select your region..."
 echo ""
 ls /usr/share/zoneinfo
 echo ""
-read region
+read -p "Select your region: " region
 echo ""
 
 # same but for city
@@ -22,7 +21,7 @@ echo "Select your city..."
 echo ""
 ls /usr/share/zoneinfo/$region
 echo ""
-read city
+read -p "Select your city: " city
 echo ""
 
 # actually set the timezone
@@ -42,8 +41,11 @@ locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 echo ""
 
-echo "Type in the hostname:"
-read hostname
+read -p "Type in the hostname [localhost] : " hostname
+if [[ $hostname == "" ]]; then
+	hostname="localhost"
+fi
+echo "Setting the hostname..."
 echo $hostname > /etc/hostname
 echo ""
 
@@ -51,18 +53,18 @@ echo "Setting the root password..."
 passwd
 echo ""
 
-echo "Do you want to add a user? (y/n)"
-read user
-echo ""
+read -p "Do you want to add a user? [y] " user
+if [[ $user == "y" || $user == "" ]]; then
+	read -p "What do you want to name your user? [user] " username
+	if [[ $username == "" ]]; then
+		username="user"
+	fi
 
-if [[ $user == "y" ]]; then
-	echo "What do you want to name your user?"
-	read username
+	# adding user to sudo group and making the sudo group have sudo stuff
 	groupadd sudo
 	useradd -m "$username" -G sudo
 	sed -i 's/# %sudo/%sudo/' /etc/sudoers
-	echo ""
-
+	
 	echo "Setting the user password..."
 	passwd $username
 fi
@@ -70,29 +72,49 @@ fi
 clear
 
 # network setup
-echo "Want to use systemd-networkd? (y/n)"
-read network
+read -p "Want to use systemd-networkd? [y] " network
 echo ""
 
-if [[ $network == "y" ]]; then
-	echo "Type in your interface..."
+if [[ $network == "y" || $network == "" ]]; then
 	# takes the long `ip a` output and shortens it down to just the interfaces
 	ip a | grep "<" | cut -d':' -f2 | cut -c 2-
 	echo ""
-	read interface
+	read -p "Select your interface: " interface
 
 	systemctl enable systemd-networkd systemd-resolved
 	echo "[Match]" >> /etc/systemd/network/20-wired.network
-	echo "Name=enp1s0" >> /etc/systemd/network/20-wired.network
+	echo "Name=$interface" >> /etc/systemd/network/20-wired.network
 	echo "[Network]" >> /etc/systemd/network/20-wired.network
 	echo "DHCP=yes" >> /etc/systemd/network/20-wired.network
 fi
 
 echo ""
 
+# swapfile
+read -p "Want a Swapfile? [y] " swap
+echo ""
+
+if [[ $swap == "y" || $swap == "" ]]; then
+	read -p "How big should the Swapfile be (in MiB)? [1024] " swapsize
+
+	# if no input is given, default to 1024
+	if [[ $swapsize == "" ]]; then
+		swapsize=1024
+	fi
+
+	echo ""
+	echo "Making Swap..."
+	dd if=/dev/zero of=/swapfile bs=1M count=$swapsize status=progress
+	chmod 600 /swapfile
+	mkswap /swapfile
+	swapon /swapfile
+	echo "/swapfile none swap defaults 0 0" >> /etc/fstab
+	echo ""
+fi
+
 # read CPU vendor (for microcode)
-echo "Do you have an Intel or AMD CPU? (lowercase pls)"
-read cpu
+read -p "Do you have an Intel or AMD CPU? (lowercase pls) " cpu
+echo ""
 # bootloader
 echo "Installing GRUB..."
 echo ""
