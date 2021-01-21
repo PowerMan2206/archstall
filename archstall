@@ -67,7 +67,7 @@ if [[ $partitioning == "A" || $partitioning == "a" ]]; then
 		mkswap /dev/$disk2
 		swapon /dev/$disk2
 		echo "Making the root partition..."
-		parted /dev/$disk mkpart "root partition" 4iGB 100%
+		parted /dev/$disk mkpart "root partition" 4GiB 100%
 		mkfs.ext4 /dev/${disk}3
 
 	elif [[ $boot == "bios" ]]; then
