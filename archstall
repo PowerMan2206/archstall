@@ -144,7 +144,7 @@ clear
 # download the package list
 echo "${green}Downloading the package list...$end"
 echo ""
-curl https://raw.githubusercontent.com/PowerMon2206/archstall/master/packages > packages
+curl https://raw.githubusercontent.com/PowerMan2206/archstall/master/packages > packages
 echo ""
 
 # edit package list
