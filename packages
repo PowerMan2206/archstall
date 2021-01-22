@@ -1,0 +1,36 @@
+base
+base-devel
+linux
+#linux-lts
+linux-firmware
+
+man-db
+
+nano
+#vim
+
+# window managers
+#i3-gaps
+#bspwm
+#openbox
+#xmonad
+#awesome
+#herbstluftwm
+
+# desktop environments (best to choose only one)
+#gnome
+#plasma
+#lxqt
+#mate
+#xfce4
+#xfce4-goodies
+
+# browsers
+#firefox
+#chromium
+#qutebrowser
+
+# other stuff
+neofetch
+#pulseaudio
+

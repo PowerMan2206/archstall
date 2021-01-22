@@ -1,61 +1,77 @@
 #!/bin/bash
 
 #
-# Archstall2 v0.2 Arch Linux installer made by PowerMan2206.
+# Archstall2 Arch Linux installer made by PowerMan2206.
 # Meant to be run through the other script, don't run on it's own
 #
+
+# set style variables
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+yellow=$(tput setaf 3)
+blue=$(tput setaf 4)
+bold=$(tput bold)
+end=$(tput sgr0)
 
 # set the variables
 boot=`cat /bootmode`
 disk=`cat /diskthing`
+dm=`cat /dm`
+de=`cat /de`
 
 # select timezone region
 echo ""
 ls /usr/share/zoneinfo
 echo ""
-read -p "Select your region: " region
+read -p "Select your ${yellow}region$end: " region
+
 echo ""
 
 # same but for city
-echo "Select your city..."
 echo ""
 ls /usr/share/zoneinfo/$region
 echo ""
-read -p "Select your city: " city
+read -p "Select your ${yellow}city$end: " city
+
 echo ""
 
 # actually set the timezone
-echo "Setting the timezone..."
+echo "Setting the ${bold}timezone$end..."
 ln -sf /usr/share/zoneinfo/$region/$city /etc/localtime
+
 echo ""
 
 # somethingsomething time
-echo "Generating /etc/adjtime..."
+echo "Generating ${bold}/etc/adjtime$end..."
 hwclock --systohc
+
 echo ""
 
 # locale stuff (???)
-echo "Setting the locale..."
+echo "Setting the ${bold}locale$end..."
 sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/' /etc/locale.gen
 locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
+
 echo ""
 
-read -p "Type in the hostname [localhost] : " hostname
+read -p "Type in the ${yellow}hostname$end [localhost] : " hostname
 if [[ $hostname == "" ]]; then
 	hostname="localhost"
 fi
-echo "Setting the hostname..."
+echo "Setting the ${yellow}hostname$end..."
 echo $hostname > /etc/hostname
+
 echo ""
 
-echo "Setting the root password..."
+echo "Setting the ${red}root$end password..."
 passwd
+
 echo ""
 
-read -p "Do you want to add a user? [y] " user
+read -p "Do you want to add a ${blue}user$end? [y] " user
 if [[ $user == "y" || $user == "" ]]; then
-	read -p "What do you want to name your user? [user] " username
+	read -p "What do you want to name your ${blue}user$end? [user] " username
 	if [[ $username == "" ]]; then
 		username="user"
 	fi
@@ -65,22 +81,25 @@ if [[ $user == "y" || $user == "" ]]; then
 	useradd -m "$username" -G sudo
 	sed -i 's/# %sudo/%sudo/' /etc/sudoers
 	
-	echo "Setting the user password..."
+	echo "Setting the ${blue}user$end password..."
 	passwd $username
 fi
 
 clear
 
 # network setup
-read -p "Want to use systemd-networkd? [y] " network
-echo ""
+read -p "Want to use ${yellow}systemd-networkd$end? [y] " network
 
 if [[ $network == "y" || $network == "" ]]; then
+	echo ""
 	# takes the long `ip a` output and shortens it down to just the interfaces
 	ip a | grep "<" | cut -d':' -f2 | cut -c 2-
 	echo ""
-	read -p "Select your interface: " interface
+	read -p "Select your ${yellow}interface$end: " interface
 
+	echo ""
+
+	echo "Enabling needed services and writing configuration file..."
 	systemctl enable systemd-networkd systemd-resolved
 	echo "[Match]" >> /etc/systemd/network/20-wired.network
 	echo "Name=$interface" >> /etc/systemd/network/20-wired.network
@@ -88,8 +107,10 @@ if [[ $network == "y" || $network == "" ]]; then
 	echo "DHCP=yes" >> /etc/systemd/network/20-wired.network
 fi
 
+echo ""
+
 # swapfile
-read -p "Want a Swapfile? [y] " swap
+read -p "Want a ${yellow}Swapfile$end? [y] " swap
 echo ""
 
 if [[ $swap == "y" || $swap == "" ]]; then
@@ -101,17 +122,27 @@ if [[ $swap == "y" || $swap == "" ]]; then
 	fi
 
 	echo ""
+
 	echo "Making Swap..."
 	dd if=/dev/zero of=/swapfile bs=1M count=$swapsize status=progress
 	chmod 600 /swapfile
 	mkswap /swapfile
 	swapon /swapfile
 	echo "/swapfile none swap defaults 0 0" >> /etc/fstab
+
 	echo ""
 fi
 
+# enable services
+if [[ $de == "y" ]]; then
+	echo "Enabling the DE-specific service..."
+	systemctl enable $dm
+fi
+
+echo ""
+
 # read CPU vendor (for microcode)
-read -p "Do you have an Intel or AMD CPU? (lowercase pls) " cpu
+read -p "Do you have an ${blue}Intel$end or ${red}AMD$end CPU? (lowercase pls) " cpu
 echo ""
 # bootloader
 echo "Installing GRUB..."

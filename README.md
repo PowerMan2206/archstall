@@ -1,15 +1,15 @@
 # Archstall
-Minimal Arch Linux install script.
+Simple Arch Linux installer.
 
 ## Usage
-To use the script, just run 
+To use the script, run 
 
 ```
 curl https://raw.githubusercontent.com/PowerMan2206/archstall/master/archstall > archstall
 bash archstall
 ```
 
-from a booted Arch live environment. It'll download the script, make it executable, and run it. Follow the instructions and you're golden.
+from a booted Arch live environment. Follow the instructions and you're golden.
 
 ## why
 Well I don't like other Arch installers so I just made this.

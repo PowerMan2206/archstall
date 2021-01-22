@@ -1,32 +1,22 @@
 #!/bin/bash
 
 #
-# Archstall v0.2 Arch Linux installer made by PowerMan2206.
+# Archstall Arch Linux installer made by PowerMan2206.
 #
+
+# set style variables
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+yellow=$(tput setaf 3)
+blue=$(tput setaf 4)
+bold=$(tput bold)
+end=$(tput sgr0)
 
 clear
 
-# write the package list
-cat > packages <<EOF
-# coreutils and shit, basic commands
-base
-# fakeroot and stuff, needed for AUR helpers
-base-devel
-# the kernel and firmware
-linux
-#linux-lts
-linux-firmware
-# manpages
-man-db
-# text editor
-nano
-#vim
-
-EOF
-
-echo "Archstall Arch Linux installer v0.2"
-echo "This script comes with no warranty, screwing up your system is your fault"
-echo "You can cancel the script at any time with Ctrl+C"
+echo -e "${bold}${green}Archstall Arch Linux installer $end$end"
+echo -e "${red}This script comes with no warranty, screwing up your system is your fault
+You can cancel the script at any time by holding down Ctrl+C $end"
 echo ""
 read -p "Press any key to continue... "
 echo ""
@@ -34,11 +24,13 @@ echo ""
 # check the boot mode
 if [[ -d /sys/firmware/efi/efivars ]]; then
 	boot="uefi"
-	echo "System booted in UEFI mode"
+	echo -e "System booted in ${bold}UEFI$end mode"
 else
 	boot="bios"
-	echo "System booted in BIOS mode"
+	echo -e "System booted in ${bold}BIOS$end mode"
 fi
+
+echo ""
 
 # set the system clock and wait a bit for the messages
 echo "Ensuring the system clock is accurate..."
@@ -46,94 +38,176 @@ timedatectl set-ntp true; sleep 2
 
 echo ""
 
-# automatic or manual disk partitioning?
-read -p "(a)utomatic or (m)anual disk partitioning? [automatic] " partitioning 
+# get the disk to partition
+lsblk
+echo ""
+read -p "Select the disk you want to use ${red}(not a partition) $end" disk
 echo ""
 
-# actual partitioning
+# automatic or manual disk partitioning?
+read -p "Want (a)utomatic or (m)anual disk partitioning? [automatic] " partitioning 
+echo ""
+	
+# automatic partitioning
 if [[ $partitioning == "automatic" || $partitioning == "a" || $partitioning == "" ]]; then
-	lsblk
-	echo ""
-	read -p "Select the disk you want to use (not a partition!) " disk
-	echo ""
-	echo "WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK!"
+	echo "$bold${red}WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK $end $end"
 	read -p "Are you sure you want to continue? You can cancel with Ctrl+C "
 	echo ""
 	
 	if [[ $boot == "uefi" ]]; then
 		parted /dev/$disk mklabel gpt
 
-		echo "Making the EFI partition..."
+		echo "Making the ${bold}EFI$end partition..."
 		parted /dev/$disk mkpart P1 1MiB 512MiB
 		mkfs.fat -F32 /dev/${disk}1
 		parted /dev/$disk set 1 esp on
+		efipartition=${disk}1
 		
-		echo "Making the root partition..."
+		echo "Making the ${bold}root$end partition..."
 		parted /dev/$disk mkpart P2 512MiB 100%
 		mkfs.ext4 /dev/${disk}2
+		rootpartition=${disk}2
 
 	elif [[ $boot == "bios" ]]; then
 
 		parted /dev/$disk mklabel msdos
-		echo "Making the root partition..."
+		echo "Making the ${bold}root$end partition..."
 		parted /dev/$disk mkpart primary 1MiB 100%
 		mkfs.ext4 /dev/${disk}1
 		parted /dev/$disk set 1 boot on
+		rootpartition=${disk}1
 
 	fi
 
-# shut
+# manual partitioning
 elif [[ $partitioning == "manual" || $partitioning == "m" ]]; then
-	echo "Uh, yeah. I'm working on it. Use automatic for now."
-	exit
+	read -p "Do you want to use (f)disk, (c)fdisk, or (p)arted? [fdisk] " partitioner
 
+	if [[ $partitioner == "f" || $partitioner == "" ]]; then
+		fdisk /dev/$disk
+	elif [[ $partitioner == "c" ]]; then
+		cfdisk /dev/$disk
+	elif [[ $partitioner == "p" ]]; then
+		parted /dev/$disk
+	fi
+
+	echo ""
+
+	if [[ $boot == "uefi" ]]; then
+		lsblk
+		echo ""
+		read -p "What's the ${bold}EFI$end partition? [${disk}1] " efipartition
+		if [[ $efipartition == "" ]]; then
+			efipartition=${disk}1
+		fi
+		
+		echo ""
+		read -p "What's the ${bold}root$end partition? [${disk}2] " rootpartition
+		if [[ $rootpartition == "" ]]; then
+			rootpartition=${disk}2
+		fi
+
+		echo ""
+		echo "Formatting partitions..."
+		mkfs.fat -F32 /dev/$efipartition
+		mkfs.ext4 /dev/$rootpartition
+
+	elif [[ $boot == "bios" ]]; then
+		lsblk
+		echo ""
+		read -p "What's the ${bold}root$end partition? [${disk}1] " rootpartition
+		if [[ $rootpartition == "" ]]; then
+			rootpartition=${disk}1
+		fi
+
+		echo ""
+		echo "Formatting partition..."
+		mkfs.ext4 /dev/$rootpartition
+	fi
 fi
+
+echo ""
 
 # mount the partition/s
 if [[ $boot == "uefi" ]]; then
-	mount /dev/${disk}2 /mnt
+	mount /dev/$rootpartition /mnt
 	mkdir /mnt/efi
-	mount /dev/${disk}1 /mnt/efi
+	mount /dev/$efipartition /mnt/efi
 
 elif [[ $boot == "bios" ]]; then
-	mount /dev/${disk}1 /mnt
+	mount /dev/$rootpartition /mnt
 
 fi
 
 clear
 
+# download the package list
+echo "${green}Downloading the package list...$end"
+echo ""
+curl https://raw.githubusercontent.com/PowerMon2206/archstall/master/packages > packages
+echo ""
+
 # edit package list
-echo "Add packages which you want to the packages file"
-echo "(the ones already there are basically must-haves)"
+echo "Add/uncomment packages which you want in the packages file"
+echo "(the ones already uncommented are basically must-haves)"
 echo ""
 read -p "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
 echo ""
 
-if [[ $editor == "n" || $editor == "" ]]; then
+if [[ $editor == "n" || $editor == "nano" || $editor == "" ]]; then
 	nano packages
-elif [[ $editor == "v" ]]; then
+elif [[ $editor == "v" || $editor == "vim" ]]; then
 	vim packages
-else:
+elif [[ $editor == "s" || $editor == "skip" ]]; then
 	echo "Skipping package list editing..."
+fi
+
+echo ""
+
+# take the packages list and get rid of the comments
+echo "Cleaning up the package list..."
+cat packages | grep -v "#" > packagesclean
+
+echo ""
+
+# put the DE service in a variable and install extra packages if needed
+if grep -Fxq "gnome" packagesclean; then
+	dm="gdm"
+	de="y"
+elif grep -Fxq "plasma" packagesclean; then
+	dm="sddm"
+	de="y"
+	echo "konsole" >> packagesclean
+elif grep -Fxq "lxqt" packagesclean || grep -Fxq "mate" packagesclean || grep -Fxq "xfce4" packagesclean; then
+	dm="lightdm"
+	de="y"
+	echo "lightdm" >> packagesclean
+	echo "lightdm-gtk-greeter" >> packagesclean
+	echo "xorg-server" >> packagesclean
 fi
 
 # read the package list and install those packages
 echo "Installing the packages with pacstrap..."
-# take the packages list and get rid of the comments
-cat packages | grep -v "#" > packagesclean
 # actual installing
 pacstrap /mnt - < packagesclean
+
+echo ""
 
 # make the fstab
 echo "Generating the fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab
 
+echo ""
+
 # downloading the second script from GitHub and preparing stuff
-echo "Downloading the second script..."
+echo "${greed}Downloading the second script...$end"
+echo ""
 curl https://raw.githubusercontent.com/PowerMan2206/archstall/master/archstall2 > /mnt/archstall2
 chmod +x /mnt/archstall2
 echo $boot > /mnt/bootmode
 echo $disk > /mnt/diskthing
+echo $dm > /mnt/dm
+echo $de > /mnt/de
 echo ""
 
 clear
@@ -141,8 +215,13 @@ clear
 # chroot in and run the second script
 arch-chroot /mnt /bin/bash -c "su - -c /archstall2"
 
+clear
+
 # cleanup
-rm /mnt/archstall2 /mnt/bootmode /mnt/diskthing
+echo "Cleaning up files..."
+rm /mnt/archstall2 /mnt/bootmode /mnt/diskthing /mnt/dm /mnt/de
+
+echo ""
 
 # unmount the filesystems
 echo "Unmounting the filesystems..."
@@ -151,6 +230,6 @@ umount -R /mnt
 clear
 
 # reboot
-echo "Installation finished!"
+echo "${green}Installation finished!$end"
 read -p "Press any key to reboot... "
 reboot
