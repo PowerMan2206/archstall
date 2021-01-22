@@ -56,11 +56,12 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf
 echo ""
 
 read -p "Type in the ${yellow}hostname$end [localhost] : " hostname
-if [[ $hostname == "" ]]; then
-	hostname="localhost"
-fi
+echo ""
 echo "Setting the ${yellow}hostname$end..."
-echo $hostname > /etc/hostname
+case $hostname in
+	"" ) echo localhost > /etc/hostname ;;
+	*  ) echo $hostname > /etc/hostname ;;
+esac
 
 echo ""
 
@@ -70,42 +71,64 @@ passwd
 echo ""
 
 read -p "Do you want to add a ${blue}user$end? [y] " user
-if [[ $user == "y" || $user == "" ]]; then
-	read -p "What do you want to name your ${blue}user$end? [user] " username
-	if [[ $username == "" ]]; then
-		username="user"
-	fi
-
-	# adding user to sudo group and making the sudo group have sudo stuff
-	groupadd sudo
-	useradd -m "$username" -G sudo
-	sed -i 's/# %sudo/%sudo/' /etc/sudoers
+case $user in
+	y | yes | "" )
+		read -p "What do you want to name your ${blue}user$end? [user] " username
+		case $username in
+			"" ) username="user" ;;
+		esac
+		
+		# create sudo group
+		groupadd sudo
+		# adding user to sudo group and making the sudo group have sudo stuff
+		useradd -m "$username" -G sudo
+		sed -i 's/# %sudo/%sudo/' /etc/sudoers
 	
-	echo "Setting the ${blue}user$end password..."
-	passwd $username
-fi
+		# user password
+		echo "Setting the ${blue}user$end password..."
+		passwd $username
+	
+		# AUR helper
+		read -p "Do you want to install ${yellow}paru$end? [n] " aur
+		case $aur in
+			"y" | "yes" )
+				pacman -S git --noconfirm
+				cd /home/$username
+				sudo -u $username git clone https://aur.archlinux.org/paru-bin.git
+				cd paru-bin
+				sudo -u $username makepkg -si --noconfirm
+				cd ..
+				rm -rf paru-bin
+				;;
+		esac
+
+		;;
+esac
 
 clear
 
 # network setup
 read -p "Want to use ${yellow}systemd-networkd$end? [y] " network
 
-if [[ $network == "y" || $network == "" ]]; then
-	echo ""
-	# takes the long `ip a` output and shortens it down to just the interfaces
-	ip a | grep "<" | cut -d':' -f2 | cut -c 2-
-	echo ""
-	read -p "Select your ${yellow}interface$end: " interface
+case $network in
+	y | "" )
+		echo ""
+		# takes the long `ip a` output and shortens it down to just the interfaces
+		ip a | grep "<" | cut -d':' -f2 | cut -c 2-
+		echo ""
+		read -p "Select your ${yellow}interface$end: " interface
+	
+		echo ""
 
-	echo ""
+		echo "Enabling needed services and writing configuration file..."
+		systemctl enable systemd-networkd systemd-resolved
+		echo "[Match]" >> /etc/systemd/network/20-wired.network
+		echo "Name=$interface" >> /etc/systemd/network/20-wired.network
+		echo "[Network]" >> /etc/systemd/network/20-wired.network
+		echo "DHCP=yes" >> /etc/systemd/network/20-wired.network
 
-	echo "Enabling needed services and writing configuration file..."
-	systemctl enable systemd-networkd systemd-resolved
-	echo "[Match]" >> /etc/systemd/network/20-wired.network
-	echo "Name=$interface" >> /etc/systemd/network/20-wired.network
-	echo "[Network]" >> /etc/systemd/network/20-wired.network
-	echo "DHCP=yes" >> /etc/systemd/network/20-wired.network
-fi
+		;;
+esac
 
 echo ""
 
@@ -113,56 +136,63 @@ echo ""
 read -p "Want a ${yellow}Swapfile$end? [y] " swap
 echo ""
 
-if [[ $swap == "y" || $swap == "" ]]; then
-	read -p "How big should the Swapfile be (in MiB)? [1024] " swapsize
+case $swap in
+	y | "" )
+		read -p "How big should the Swapfile be (in MiB)? [1024] " swapsize
 
-	# if no input is given, default to 1024
-	if [[ $swapsize == "" ]]; then
-		swapsize=1024
-	fi
+		# if no input is given, default to 1024
+		case $swapfile in
+			"" ) swapsize=1024 ;;
+		esac
 
-	echo ""
+		echo ""
 
-	echo "Making Swap..."
-	dd if=/dev/zero of=/swapfile bs=1M count=$swapsize status=progress
-	chmod 600 /swapfile
-	mkswap /swapfile
-	swapon /swapfile
-	echo "/swapfile none swap defaults 0 0" >> /etc/fstab
+		echo "Making Swap..."
+		dd if=/dev/zero of=/swapfile bs=1M count=$swapsize status=progress
+		chmod 600 /swapfile
+		mkswap /swapfile
+		swapon /swapfile
+		echo "/swapfile none swap defaults 0 0" >> /etc/fstab
 
-	echo ""
-fi
+		echo ""
+		;;
+esac
 
 # enable services
-if [[ $de == "y" ]]; then
-	echo "Enabling the DE-specific service..."
-	systemctl enable $dm
-fi
+case $de in
+	y )
+		echo "Enabling the DE-specific service..."
+		systemctl enable $dm
+		;;
+esac
 
 echo ""
 
 # read CPU vendor (for microcode)
 read -p "Do you have an ${blue}Intel$end or ${red}AMD$end CPU? (lowercase pls) " cpu
 echo ""
+
 # bootloader
 echo "Installing GRUB..."
 echo ""
 
 # different installation methods based on the boot mode
-if [[ $boot == "uefi" ]]; then
-	pacman -S grub efibootmgr $cpu-ucode --noconfirm
-	echo ""
-	grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB
-	echo ""
-	grub-mkconfig -o /boot/grub/grub.cfg
-		
-elif [[ $boot == "bios" ]]; then
-	pacman -S grub $cpu-ucode --noconfirm
-	echo ""
-	grub-install /dev/$disk
-	echo ""
-	grub-mkconfig -o /boot/grub/grub.cfg
-	
-fi
+case $boot in
+	uefi )
+		pacman -S grub efibootmgr $cpu-ucode --noconfirm
+		echo ""
+		grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB
+		echo ""
+		grub-mkconfig -o /boot/grub/grub.cfg
+		;;
+
+	bios )
+		pacman -S grub $cpu-ucode --noconfirm
+		echo ""
+		grub-install /dev/$disk
+		echo ""
+		grub-mkconfig -o /boot/grub/grub.cfg
+		;;
+esac
 
 exit
