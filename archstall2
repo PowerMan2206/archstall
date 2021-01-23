@@ -19,25 +19,47 @@ disk=$(cat /diskthing)
 dm=$(cat /dm)
 de=$(cat /de)
 
+while true; do
 # select timezone region
 echo ""
 ls /usr/share/zoneinfo
 echo ""
 read -rp "Select your ${yellow}region$end: " region
 
-echo ""
+# for some reason this doesn't work as it's supposed to, gotta look into it
+# (still works tho)
+if [[ -d /usr/share/zoneinfo/"$region" ]]; then
+	while true; do
+	# same but for city
+	echo ""
+	ls /usr/share/zoneinfo/"$region"
+	echo ""
+	read -rp "Select your ${yellow}city$end: " city
 
-# same but for city
-echo ""
-ls /usr/share/zoneinfo/"$region"
-echo ""
-read -rp "Select your ${yellow}city$end: " city
+	if [[ -f /usr/share/zoneinfo/"$region"/"$city" ]]; then
+		echo ""
+		echo "Setting the ${bold}timezone$end..."
+		ln -sf /usr/share/zoneinfo/"$region"/"$city" /etc/localtime
+		break
+	else:
+		echo "${red}Invalid option!$end"
+		echo ""
+	fi
 
-echo ""
+	done # while loop
+	break
 
-# actually set the timezone
-echo "Setting the ${bold}timezone$end..."
-ln -sf /usr/share/zoneinfo/"$region"/"$city" /etc/localtime
+elif [[ -f /usr/share/zoneinfo/"$region" ]]; then
+	echo "Setting the ${bold}timezone$end..."
+	ln -sf /usr/share/zoneinfo/"$region" /etc/localtime
+	break
+
+else:
+	echo "${red}Invalid option!$end"
+	echo ""
+fi
+
+done # while loop
 
 echo ""
 
@@ -70,12 +92,13 @@ passwd
 
 echo ""
 
+while true; do
 read -rp "Do you want to add a ${blue}user$end? [y] " user
 case $user in
 	yes | y | "" )
 		read -rp "What do you want to name your ${blue}user$end? [user] " username
 		case $username in
-			"" ) username="user" ;;
+				"" ) username="user" ;;
 		esac
 		
 		# create sudo group
@@ -87,7 +110,8 @@ case $user in
 		# user password
 		echo "Setting the ${blue}user$end password..."
 		passwd $username
-	
+
+		while true; do
 		# AUR helper
 		read -rp "Do you want to install ${yellow}paru$end? [n] " aur
 		case $aur in
@@ -99,19 +123,46 @@ case $user in
 				sudo -u $username makepkg -si --noconfirm
 				cd ..
 				rm -rf paru-bin
+				break
 				;;
+				
+			no | n | "" )
+				echo "Skipping..."
+				break
+				;;
+				
+			* )
+				echo "${red}Invalid option!$end"
+				echo ""
+				;;
+				
 		esac
+		done # while loop
 
+		break
 		;;
-esac
+		
+	no | n )
+		echo "Skipping..."
+		break
+		;;
+
+	* )
+		echo "${red}Invalid option!$end"
+		echo ""
+		;;
+	
+esac 
+done # while loop
 
 clear
 
+while true; do
 # network setup
 read -rp "Want to use ${yellow}systemd-networkd$end? [y] " network
 
 case $network in
-	yed | y | "" )
+	yes | y | "" )
 		echo ""
 		# takes the long `ip a` output and shortens it down to just the interfaces
 		ip a | grep "<" | cut -d':' -f2 | cut -c 2-
@@ -127,11 +178,24 @@ case $network in
 		echo "[Network]" >> /etc/systemd/network/20-wired.network
 		echo "DHCP=yes" >> /etc/systemd/network/20-wired.network
 
+		break
+		;;
+		
+	no | n )
+		echo "Skipping..."
+		break
+		;;
+
+	* )
+		echo "${red}Invalid option!$end"
+		echo ""
 		;;
 esac
+done # while loop
 
 echo ""
 
+while true; do
 # swapfile
 read -rp "Want a ${yellow}Swapfile$end? [y] " swap
 echo ""
@@ -155,8 +219,21 @@ case $swap in
 		echo "/swapfile none swap defaults 0 0" >> /etc/fstab
 
 		echo ""
+		break
 		;;
+		
+	no | n )
+		echo "Skipping..."
+		break
+		;;
+
+	* )
+		echo "${red}Invalid option!$end"
+		echo ""
+		;;
+				
 esac
+done # while loop
 
 # enable services
 case $de in
@@ -168,9 +245,28 @@ esac
 
 echo ""
 
+while true; do
 # read CPU vendor (for microcode)
 read -rp "Do you have an ${blue}Intel$end or ${red}AMD$end CPU? (lowercase pls) " cpu
-echo ""
+
+case $cpu in
+	intel | amd )
+		break
+		;;
+	a )
+		cpu=amd
+		break
+		;;
+	i )
+		cpu=intel
+		break
+		;;
+	* )	
+		echo "${red}Invalid option!$end"
+		echo ""
+		;;
+esac
+done # while loop
 
 # bootloader
 echo "Installing GRUB..."

@@ -54,7 +54,7 @@ echo ""
 
 # set the system clock and wait a bit for the messages
 echo "Ensuring the system clock is accurate..."
-timedatectl set-ntp true; sleep 1
+timedatectl set-ntp true; sleep 1 
 
 echo ""
 
@@ -64,13 +64,14 @@ echo ""
 read -rp "Select the disk you want to use ${red}(not a partition) $end" disk
 echo ""
 
+while true; do
 # automatic or manual disk partitioning?
 read -rp "Want (a)utomatic or (m)anual disk partitioning? [automatic] " partitioning 
-echo ""
-	
+
 case $partitioning in
 	# automatic partitioning
 	automatic | a | "" )
+		echo ""
 		echo "$bold${red}WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK $end"
 		read -rp "Are you sure you want to continue? You can cancel with Ctrl+C "
 		echo ""
@@ -84,37 +85,51 @@ case $partitioning in
 				echo "${green}Formatting the EFI partition to FAT32...$end"
 				mkfs.fat -F32 /dev/"${disk}"1
 				efipartition="${disk}"1
-
 				echo ""
-			
 				echo "${green}Making the ${bold}root partition...$end"
 				parted /dev/"$disk" mkpart P2 512MiB 100%
 				rootpartition="${disk}"2
-
 				;;
 
 			bios )
 				parted /dev/"$disk" mklabel msdos
-				
+			
 				echo "${green}Making the ${bold}root partition...$end"
 				parted /dev/"$disk" mkpart primary 1MiB 100%
 				parted /dev/"$disk" set 1 boot on
 				rootpartition="${disk}"1
-
 				;;
 		esac
 
+		break
 		;;
 
 	# manual partitioning
 	manual | m )
+		echo ""
+		while true; do
 		read -rp "Do you want to use (f)disk, (c)fdisk, or (p)arted? [fdisk] " partitioner
 
 		case $partitioner in
-			f | fdisk | "" ) fdisk /dev/"$disk" ;;
-			c | cfdisk ) cfdisk /dev/"$disk" ;;
-			p | parted ) parted /dev/"$disk" ;;
+			f | fdisk | "" ) 
+				fdisk /dev/"$disk" 
+				break
+				;;
+			c | cfdisk ) 
+				cfdisk /dev/"$disk" 
+				break
+				;;
+			p | parted ) 
+				parted /dev/"$disk" 
+				break
+				;;
+			* )
+				echo "${red}Invalid option!$end"
+				echo ""
+				;;
+		
 		esac
+		done # while loop
 
 		echo ""
 
@@ -123,48 +138,64 @@ case $partitioning in
 				lsblk
 				echo ""
 				read -rp "What's the ${bold}EFI$end partition? " efipartition
-
 				echo ""
 				read -rp "What's the ${bold}root$end partition? " rootpartition
-
 				echo ""
 				echo "${green}Formatting the EFI partition to FAT32...$end"
 				mkfs.fat -F32 /dev/"$efipartition"
-				
 				;;
-
+	
 			bios )
 				lsblk
 				echo ""
 				read -rp "What's the ${bold}root$end partition? " rootpartition
-				
 				;;
 		esac
-		
-		;;		
-esac
 
+		break
+		;;	
+	
+	* )
+		echo "${red}Invalid option!$end"
+		echo ""
+		;;
+
+esac
+done # while loop
+
+while true; do
 read -rp "Select the root filesystem: ext(4), (x)fs [ext4] " fs
-echo ""
 
 case $fs in
 	ext4 | 4 | "" )
+		echo ""
 		echo "Formatting the root partition to ext4..."
 		mkfs.ext4 /dev/"$rootpartition"
+		break
 		;;
 
 	# later
 	#btrfs | b )
+		#echo ""
 		#echo "Formatting the root partition to btrfs..."
 		#mkfs.btrfs -f /dev/$rootpartition
 		## will add subvolumes when I figure out how they work
+		#break
 		#;;
 						
 	xfs | x )
+		echo ""
 		echo "Formatting the root partition to xfs..."
 		mkfs.xfs /dev/"$rootpartition"
-		;;			
-esac
+		break
+		;;	
+		
+	* )
+		echo "${red}Invalid option!$end"
+		echo ""
+		;;
+esac 
+done # while loop
 
 echo ""
 
@@ -194,17 +225,31 @@ echo ""
 echo "Add/uncomment packages which you want in the packages file"
 echo "(the ones already uncommented are basically must-haves)"
 echo ""
+
+while true; do
 read -rp "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
-echo ""
 
 case $editor in
 	nano | n | "" )
-		nano packages ;;
+		nano packages
+		break
+		;;
 	vim | v )
-		vim packages ;;
+		vim packages
+		break
+		;;
 	skip | s )
-		echo "Skipping package list editing..." ;;
+		echo ""
+		echo "Skipping package list editing..."
+		break
+		;;
+	* )
+		echo "${red}Invalid option!$end"
+		echo ""
+		;;
+		
 esac
+done # while loop
 
 echo ""
 
