@@ -38,7 +38,7 @@ echo "${bold}${green}Archstall Arch Linux installer $end"
 echo "${red}This script comes with no warranty, screwing up your system is your fault
 You can cancel the script at any time by holding down Ctrl+C $end"
 echo ""
-read -p "Press any key to continue... "
+read -rp "Press any key to continue... "
 echo ""
 
 # check the boot mode
@@ -61,45 +61,45 @@ echo ""
 # get the disk to partition
 lsblk
 echo ""
-read -p "Select the disk you want to use ${red}(not a partition) $end" disk
+read -rp "Select the disk you want to use ${red}(not a partition) $end" disk
 echo ""
 
 # automatic or manual disk partitioning?
-read -p "Want (a)utomatic or (m)anual disk partitioning? [automatic] " partitioning 
+read -rp "Want (a)utomatic or (m)anual disk partitioning? [automatic] " partitioning 
 echo ""
 	
 case $partitioning in
 	# automatic partitioning
 	automatic | a | "" )
 		echo "$bold${red}WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK $end"
-		read -p "Are you sure you want to continue? You can cancel with Ctrl+C "
+		read -rp "Are you sure you want to continue? You can cancel with Ctrl+C "
 		echo ""
 	
 		case $boot in
 			uefi )
-				parted /dev/$disk mklabel gpt
+				parted /dev/"$disk" mklabel gpt
 
 				echo "${green}Making the ${bold}EFI partition...$end"
-				parted /dev/$disk mkpart P1 1MiB 512MiB
+				parted /dev/"$disk" mkpart P1 1MiB 512MiB
 				echo "${green}Formatting the EFI partition to FAT32...$end"
-				mkfs.fat -F32 /dev/${disk}1
-				efipartition=${disk}1
+				mkfs.fat -F32 /dev/"${disk}"1
+				efipartition="${disk}"1
 
 				echo ""
 			
 				echo "${green}Making the ${bold}root partition...$end"
-				parted /dev/$disk mkpart P2 512MiB 100%
-				rootpartition=${disk}2
+				parted /dev/"$disk" mkpart P2 512MiB 100%
+				rootpartition="${disk}"2
 
 				;;
 
 			bios )
-				parted /dev/$disk mklabel msdos
+				parted /dev/"$disk" mklabel msdos
 				
 				echo "${green}Making the ${bold}root partition...$end"
-				parted /dev/$disk mkpart primary 1MiB 100%
-				parted /dev/$disk set 1 boot on
-				rootpartition=${disk}1
+				parted /dev/"$disk" mkpart primary 1MiB 100%
+				parted /dev/"$disk" set 1 boot on
+				rootpartition="${disk}"1
 
 				;;
 		esac
@@ -108,35 +108,36 @@ case $partitioning in
 
 	# manual partitioning
 	manual | m )
-		read -p "Do you want to use (f)disk, (c)fdisk, or (p)arted? [fdisk] " partitioner
+		read -rp "Do you want to use (f)disk, (c)fdisk, or (p)arted? [fdisk] " partitioner
 
 		case $partitioner in
-			f | fdisk ) fdisk /dev/$disk ;;
-			c | cfdisk ) cfdisk /dev/$disk ;;
-			p | parted ) parted /dev/$disk ;;
+			f | fdisk | "" ) fdisk /dev/"$disk" ;;
+			c | cfdisk ) cfdisk /dev/"$disk" ;;
+			p | parted ) parted /dev/"$disk" ;;
 		esac
 
 		echo ""
-		
+
+		read -rp "boot is $boot"
 		case $boot in
 			uefi )
 				lsblk
 				echo ""
-				read -p "What's the ${bold}EFI$end partition? " efipartition
+				read -rp "What's the ${bold}EFI$end partition? " efipartition
 
 				echo ""
-				read -p "What's the ${bold}root$end partition? " rootpartition
+				read -rp "What's the ${bold}root$end partition? " rootpartition
 
 				echo ""
 				echo "${green}Formatting the EFI partition to FAT32...$end"
-				mkfs.fat -F32 /dev/$efipartition
+				mkfs.fat -F32 /dev/"$efipartition"
 				
 				;;
 
-			boot )
+			bios )
 				lsblk
 				echo ""
-				read -p "What's the ${bold}root$end partition? " rootpartition
+				read -rp "What's the ${bold}root$end partition? " rootpartition
 				
 				;;
 		esac
@@ -144,13 +145,13 @@ case $partitioning in
 		;;		
 esac
 
-read -p "Select the root filesystem: ext(4), (x)fs [ext4] " fs
+read -rp "Select the root filesystem: ext(4), (x)fs [ext4] " fs
 echo ""
 
 case $fs in
 	ext4 | 4 | "" )
 		echo "Formatting the root partition to ext4..."
-		mkfs.ext4 -f /dev/$rootpartition
+		mkfs.ext4 /dev/"$rootpartition"
 		;;
 
 	# later
@@ -162,7 +163,7 @@ case $fs in
 						
 	xfs | x )
 		echo "Formatting the root partition to xfs..."
-		mkfs.xfs -f /dev/$rootpartition
+		mkfs.xfs /dev/"$rootpartition"
 		;;			
 esac
 
@@ -172,13 +173,13 @@ echo ""
 echo "Mounting the partitions..."
 case $boot in
 	uefi )
-		mount /dev/$rootpartition /mnt
+		mount /dev/"$rootpartition" /mnt
 		mkdir /mnt/efi
-		mount /dev/$efipartition /mnt/efi
+		mount /dev/"$efipartition" /mnt/efi
 		;;
 
 	bios )
-		mount /dev/$rootpartition /mnt
+		mount /dev/"$rootpartition" /mnt
 		;;
 esac
 
@@ -194,7 +195,7 @@ echo ""
 echo "Add/uncomment packages which you want in the packages file"
 echo "(the ones already uncommented are basically must-haves)"
 echo ""
-read -p "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
+read -rp "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
 echo ""
 
 case $editor in
@@ -210,7 +211,7 @@ echo ""
 
 # take the packages list and get rid of the comments
 echo "Cleaning up the package list..."
-cat packages | grep -v "#" > packagesclean
+grep -v "#" packages > packagesclean
 
 echo ""
 
@@ -249,7 +250,7 @@ echo ""
 curl https://raw.githubusercontent.com/PowerMan2206/archstall/master/archstall2 > /mnt/archstall2
 chmod +x /mnt/archstall2
 echo $boot > /mnt/bootmode
-echo $disk > /mnt/diskthing
+echo "$disk" > /mnt/diskthing
 echo $dm > /mnt/dm
 echo $de > /mnt/de
 
@@ -274,5 +275,5 @@ echo ""
 
 # reboot
 echo "${bold}${green}Installation finished!$end"
-read -p "Press any key to reboot... "
+read -rp "Press any key to reboot... "
 reboot

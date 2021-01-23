@@ -14,30 +14,30 @@ bold=$(tput bold)
 end=$(tput sgr0)
 
 # set the variables
-boot=`cat /bootmode`
-disk=`cat /diskthing`
-dm=`cat /dm`
-de=`cat /de`
+boot=$(cat /bootmode)
+disk=$(cat /diskthing)
+dm=$(cat /dm)
+de=$(cat /de)
 
 # select timezone region
 echo ""
 ls /usr/share/zoneinfo
 echo ""
-read -p "Select your ${yellow}region$end: " region
+read -rp "Select your ${yellow}region$end: " region
 
 echo ""
 
 # same but for city
 echo ""
-ls /usr/share/zoneinfo/$region
+ls /usr/share/zoneinfo/"$region"
 echo ""
-read -p "Select your ${yellow}city$end: " city
+read -rp "Select your ${yellow}city$end: " city
 
 echo ""
 
 # actually set the timezone
 echo "Setting the ${bold}timezone$end..."
-ln -sf /usr/share/zoneinfo/$region/$city /etc/localtime
+ln -sf /usr/share/zoneinfo/"$region"/"$city" /etc/localtime
 
 echo ""
 
@@ -55,12 +55,12 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 echo ""
 
-read -p "Type in the ${yellow}hostname$end [localhost] : " hostname
+read -rp "Type in the ${yellow}hostname$end [localhost] : " hostname
 echo ""
 echo "Setting the ${yellow}hostname$end..."
 case $hostname in
 	"" ) echo localhost > /etc/hostname ;;
-	*  ) echo $hostname > /etc/hostname ;;
+	*  ) echo "$hostname" > /etc/hostname ;;
 esac
 
 echo ""
@@ -70,10 +70,10 @@ passwd
 
 echo ""
 
-read -p "Do you want to add a ${blue}user$end? [y] " user
+read -rp "Do you want to add a ${blue}user$end? [y] " user
 case $user in
 	yes | y | "" )
-		read -p "What do you want to name your ${blue}user$end? [user] " username
+		read -rp "What do you want to name your ${blue}user$end? [user] " username
 		case $username in
 			"" ) username="user" ;;
 		esac
@@ -89,7 +89,7 @@ case $user in
 		passwd $username
 	
 		# AUR helper
-		read -p "Do you want to install ${yellow}paru$end? [n] " aur
+		read -rp "Do you want to install ${yellow}paru$end? [n] " aur
 		case $aur in
 			yes | y )
 				pacman -S git --noconfirm
@@ -108,7 +108,7 @@ esac
 clear
 
 # network setup
-read -p "Want to use ${yellow}systemd-networkd$end? [y] " network
+read -rp "Want to use ${yellow}systemd-networkd$end? [y] " network
 
 case $network in
 	yed | y | "" )
@@ -116,7 +116,7 @@ case $network in
 		# takes the long `ip a` output and shortens it down to just the interfaces
 		ip a | grep "<" | cut -d':' -f2 | cut -c 2-
 		echo ""
-		read -p "Select your ${yellow}interface$end: " interface
+		read -rp "Select your ${yellow}interface$end: " interface
 	
 		echo ""
 
@@ -133,15 +133,15 @@ esac
 echo ""
 
 # swapfile
-read -p "Want a ${yellow}Swapfile$end? [y] " swap
+read -rp "Want a ${yellow}Swapfile$end? [y] " swap
 echo ""
 
 case $swap in
 	yes | y | "" )
-		read -p "How big should the Swapfile be (in MiB)? [1024] " swapsize
+		read -rp "How big should the Swapfile be (in MiB)? [1024] " swapsize
 
 		# if no input is given, default to 1024
-		case $swapfile in
+		case "$swapfile" in
 			"" ) swapsize=1024 ;;
 		esac
 
@@ -162,14 +162,14 @@ esac
 case $de in
 	y )
 		echo "Enabling the DE-specific service..."
-		systemctl enable $dm
+		systemctl enable "$dm"
 		;;
 esac
 
 echo ""
 
 # read CPU vendor (for microcode)
-read -p "Do you have an ${blue}Intel$end or ${red}AMD$end CPU? (lowercase pls) " cpu
+read -rp "Do you have an ${blue}Intel$end or ${red}AMD$end CPU? (lowercase pls) " cpu
 echo ""
 
 # bootloader
@@ -179,7 +179,7 @@ echo ""
 # different installation methods based on the boot mode
 case $boot in
 	uefi )
-		pacman -S grub efibootmgr $cpu-ucode --noconfirm
+		pacman -S grub efibootmgr "$cpu"-ucode --noconfirm
 		echo ""
 		grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB
 		echo ""
@@ -187,9 +187,9 @@ case $boot in
 		;;
 
 	bios )
-		pacman -S grub $cpu-ucode --noconfirm
+		pacman -S grub "$cpu"-ucode --noconfirm
 		echo ""
-		grub-install /dev/$disk
+		grub-install /dev/"$disk"
 		echo ""
 		grub-mkconfig -o /boot/grub/grub.cfg
 		;;
