@@ -26,8 +26,6 @@ ls /usr/share/zoneinfo
 echo ""
 read -rp "Select your ${yellow}region$end: " region
 
-# for some reason this doesn't work as it's supposed to, gotta look into it
-# (still works tho)
 if [[ -d /usr/share/zoneinfo/"$region" ]]; then
 	while true; do
 	# same but for city
@@ -41,7 +39,7 @@ if [[ -d /usr/share/zoneinfo/"$region" ]]; then
 		echo "Setting the ${bold}timezone$end..."
 		ln -sf /usr/share/zoneinfo/"$region"/"$city" /etc/localtime
 		break
-	else:
+	else :
 		echo "${red}Invalid option!$end"
 		echo ""
 	fi
@@ -54,7 +52,7 @@ elif [[ -f /usr/share/zoneinfo/"$region" ]]; then
 	ln -sf /usr/share/zoneinfo/"$region" /etc/localtime
 	break
 
-else:
+else : 
 	echo "${red}Invalid option!$end"
 	echo ""
 fi
@@ -205,7 +203,7 @@ case $swap in
 		read -rp "How big should the Swapfile be (in MiB)? [1024] " swapsize
 
 		# if no input is given, default to 1024
-		case "$swapfile" in
+		case "$swapsize" in
 			"" ) swapsize=1024 ;;
 		esac
 
