@@ -18,11 +18,12 @@ nano
 #herbstluftwm
 
 # desktop environments (best to choose only one)
+# a display manager gets automatically installed depending on which desktop environment you select
 #gnome
 #plasma
 #lxqt
 #mate
-#xfce4
+#xfce4 
 #xfce4-goodies
 
 # browsers

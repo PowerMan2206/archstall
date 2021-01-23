@@ -72,7 +72,7 @@ echo ""
 
 read -p "Do you want to add a ${blue}user$end? [y] " user
 case $user in
-	y | yes | "" )
+	yes | y | "" )
 		read -p "What do you want to name your ${blue}user$end? [user] " username
 		case $username in
 			"" ) username="user" ;;
@@ -91,7 +91,7 @@ case $user in
 		# AUR helper
 		read -p "Do you want to install ${yellow}paru$end? [n] " aur
 		case $aur in
-			"y" | "yes" )
+			yes | y )
 				pacman -S git --noconfirm
 				cd /home/$username
 				sudo -u $username git clone https://aur.archlinux.org/paru-bin.git
@@ -111,7 +111,7 @@ clear
 read -p "Want to use ${yellow}systemd-networkd$end? [y] " network
 
 case $network in
-	y | "" )
+	yed | y | "" )
 		echo ""
 		# takes the long `ip a` output and shortens it down to just the interfaces
 		ip a | grep "<" | cut -d':' -f2 | cut -c 2-
@@ -137,7 +137,7 @@ read -p "Want a ${yellow}Swapfile$end? [y] " swap
 echo ""
 
 case $swap in
-	y | "" )
+	yes | y | "" )
 		read -p "How big should the Swapfile be (in MiB)? [1024] " swapsize
 
 		# if no input is given, default to 1024

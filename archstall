@@ -10,12 +10,32 @@ green=$(tput setaf 2)
 yellow=$(tput setaf 3)
 blue=$(tput setaf 4)
 bold=$(tput bold)
+italic=$(tput sitm)
 end=$(tput sgr0)
+
+case $1 in
+	--help | -h )
+		echo "${bold}${green}Archstall Arch Linux installer$end"
+		echo "This script is made by PowerMan2206"
+		echo "https://github.com/PowerMan2206/archstall"
+		echo ""
+		echo "Usage:"
+		echo "${bold}  --help | -h$end"
+		echo "    show this help menu and exit"
+		echo "${bold}  just running the script$end"
+		echo "    run Archstall"
+		echo ""
+		echo "${italic}more coming soon maybe$end"
+		echo ""
+		
+		exit
+		;;
+esac
 
 clear
 
-echo -e "${bold}${green}Archstall Arch Linux installer $end"
-echo -e "${red}This script comes with no warranty, screwing up your system is your fault
+echo "${bold}${green}Archstall Arch Linux installer $end"
+echo "${red}This script comes with no warranty, screwing up your system is your fault
 You can cancel the script at any time by holding down Ctrl+C $end"
 echo ""
 read -p "Press any key to continue... "
@@ -24,10 +44,10 @@ echo ""
 # check the boot mode
 if [[ -d /sys/firmware/efi/efivars ]]; then
 	boot=uefi
-	echo -e "System booted in ${bold}UEFI$end mode"
+	echo "System booted in ${bold}UEFI$end mode"
 else
 	boot=bios
-	echo -e "System booted in ${bold}BIOS$end mode"
+	echo "System booted in ${bold}BIOS$end mode"
 fi
 
 echo ""
@@ -59,15 +79,16 @@ case $partitioning in
 			uefi )
 				parted /dev/$disk mklabel gpt
 
-				echo "Making the ${bold}EFI$end partition..."
+				echo "${green}Making the ${bold}EFI partition...$end"
 				parted /dev/$disk mkpart P1 1MiB 512MiB
+				echo "${green}Formatting the EFI partition to FAT32...$end"
 				mkfs.fat -F32 /dev/${disk}1
-				parted /dev/$disk set 1 esp on
 				efipartition=${disk}1
+
+				echo ""
 			
-				echo "Making the ${bold}root$end partition..."
+				echo "${green}Making the ${bold}root partition...$end"
 				parted /dev/$disk mkpart P2 512MiB 100%
-				mkfs.ext4 /dev/${disk}2
 				rootpartition=${disk}2
 
 				;;
@@ -75,9 +96,8 @@ case $partitioning in
 			bios )
 				parted /dev/$disk mklabel msdos
 				
-				echo "Making the ${bold}root$end partition..."
+				echo "${green}Making the ${bold}root partition...$end"
 				parted /dev/$disk mkpart primary 1MiB 100%
-				mkfs.ext4 /dev/${disk}1
 				parted /dev/$disk set 1 boot on
 				rootpartition=${disk}1
 
@@ -97,50 +117,59 @@ case $partitioning in
 		esac
 
 		echo ""
-
+		
 		case $boot in
 			uefi )
 				lsblk
 				echo ""
-				read -p "What's the ${bold}EFI$end partition? [${disk}1] " efipartition
-				case $efipartition in
-					"" )
-					efipartition=${disk}1 ;;
-				esac
-		
-				echo ""
-				read -p "What's the ${bold}root$end partition? [${disk}2] " rootpartition
-				case $rootpartition in
-					"" ) rootpartition=${disk}2 ;;
-				esac
+				read -p "What's the ${bold}EFI$end partition? " efipartition
 
 				echo ""
-				echo "Formatting partitions..."
+				read -p "What's the ${bold}root$end partition? " rootpartition
+
+				echo ""
+				echo "${green}Formatting the EFI partition to FAT32...$end"
 				mkfs.fat -F32 /dev/$efipartition
-				mkfs.ext4 /dev/$rootpartition
-
+				
 				;;
 
 			boot )
 				lsblk
 				echo ""
-				read -p "What's the ${bold}root$end partition? [${disk}1] " rootpartition
-				if [[ $rootpartition == "" ]]; then
-					rootpartition=${disk}1
-				fi
-
-				echo ""
-				echo "Formatting partition..."
-				mkfs.ext4 /dev/$rootpartition
-
+				read -p "What's the ${bold}root$end partition? " rootpartition
+				
 				;;
 		esac
+		
 		;;		
+esac
+
+read -p "Select the root filesystem: ext(4), (x)fs [ext4] " fs
+echo ""
+
+case $fs in
+	ext4 | 4 | "" )
+		echo "Formatting the root partition to ext4..."
+		mkfs.ext4 -f /dev/$rootpartition
+		;;
+
+	# later
+	#btrfs | b )
+		#echo "Formatting the root partition to btrfs..."
+		#mkfs.btrfs -f /dev/$rootpartition
+		## will add subvolumes when I figure out how they work
+		#;;
+						
+	xfs | x )
+		echo "Formatting the root partition to xfs..."
+		mkfs.xfs -f /dev/$rootpartition
+		;;			
 esac
 
 echo ""
 
 # mount the partition/s
+echo "Mounting the partitions..."
 case $boot in
 	uefi )
 		mount /dev/$rootpartition /mnt
@@ -169,11 +198,11 @@ read -p "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [na
 echo ""
 
 case $editor in
-	n | nano | "" )
+	nano | n | "" )
 		nano packages ;;
-	v | vim )
+	vim | v )
 		vim packages ;;
-	s | skip )
+	skip | s )
 		echo "Skipping package list editing..." ;;
 esac
 
@@ -242,7 +271,7 @@ echo ""
 echo "Unmounting the filesystems..."
 umount -R /mnt 
 
-clear
+echo ""
 
 # reboot
 echo "${bold}${green}Installation finished!$end"
