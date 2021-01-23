@@ -43,10 +43,10 @@ echo ""
 
 # check the boot mode
 if [[ -d /sys/firmware/efi/efivars ]]; then
-	boot=uefi
+	boot="uefi"
 	echo "System booted in ${bold}UEFI$end mode"
 else
-	boot=bios
+	boot="bios"
 	echo "System booted in ${bold}BIOS$end mode"
 fi
 
