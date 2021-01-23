@@ -118,7 +118,6 @@ case $partitioning in
 
 		echo ""
 
-		read -rp "boot is $boot"
 		case $boot in
 			uefi )
 				lsblk
