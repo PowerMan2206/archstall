@@ -97,28 +97,11 @@ case $user in
 		case $username in
 				"" ) username="user" ;;
 		esac
-		
-		while true; do
-		read -rp "Use systemd-homed for ${blue}$username$end (LUKS home directory encryption)? [n] " homed
-		case $homed in
-			yes | y )
-				systemctl enable --now systemd-homed
-				homectl create "$username" --storage=luks
-				break
-				;;
-			no | n | "" )
-				useradd -m "$username"
-				echo ""
-				echo "Setting the ${blue}user$end password..."
-				passwd $username
-				break
-				;;
-			* )
-				echo "${red}Invalid option!$end"
-				echo ""
-				;;
-		esac
-		done # while loop
+
+		useradd -m "$username"
+		echo ""
+		echo "Setting the ${blue}user$end password..."
+		passwd $username
 		
 		# create sudo group
 		groupadd sudo
