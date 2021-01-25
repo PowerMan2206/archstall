@@ -18,10 +18,10 @@ boot=$(cat /bootmode)
 disk=$(cat /diskthing)
 dm=$(cat /dm)
 de=$(cat /de)
+fs=$(cat /fs)
 
 while true; do
 # select timezone region
-echo ""
 ls /usr/share/zoneinfo
 echo ""
 read -rp "Select your ${yellow}region$end: " region
@@ -33,7 +33,7 @@ if [[ -d /usr/share/zoneinfo/"$region" ]]; then
 	ls /usr/share/zoneinfo/"$region"
 	echo ""
 	read -rp "Select your ${yellow}city$end: " city
-
+	
 	if [[ -f /usr/share/zoneinfo/"$region"/"$city" ]]; then
 		echo ""
 		echo "Setting the ${bold}timezone$end..."
@@ -41,9 +41,8 @@ if [[ -d /usr/share/zoneinfo/"$region" ]]; then
 		break
 	else :
 		echo "${red}Invalid option!$end"
-		echo ""
 	fi
-
+	
 	done # while loop
 	break
 
@@ -75,7 +74,7 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 echo ""
 
-read -rp "Type in the ${yellow}hostname$end [localhost] : " hostname
+read -rp "${yellow}hostname$end [localhost] : " hostname
 echo ""
 echo "Setting the ${yellow}hostname$end..."
 case $hostname in
@@ -91,7 +90,7 @@ passwd
 echo ""
 
 while true; do
-read -rp "Do you want to add a ${blue}user$end? [y] " user
+read -rp "Add a ${blue}user$end? [y] " user
 case $user in
 	yes | y | "" )
 		read -rp "What do you want to name your ${blue}user$end? [user] " username
@@ -99,19 +98,37 @@ case $user in
 				"" ) username="user" ;;
 		esac
 		
+		while true; do
+		read -rp "Use systemd-homed for ${blue}$username$end (LUKS home directory encryption)? [n] " homed
+		case $homed in
+			yes | y )
+				systemctl enable --now systemd-homed
+				homectl create "$username" --storage=luks
+				break
+				;;
+			no | n | "" )
+				useradd -m "$username"
+				echo ""
+				echo "Setting the ${blue}user$end password..."
+				passwd $username
+				break
+				;;
+			* )
+				echo "${red}Invalid option!$end"
+				echo ""
+				;;
+		esac
+		done # while loop
+		
 		# create sudo group
 		groupadd sudo
 		# adding user to sudo group and making the sudo group have sudo stuff
-		useradd -m "$username" -G sudo
+		gpasswd -a "$username" sudo
 		sed -i 's/# %sudo/%sudo/' /etc/sudoers
-	
-		# user password
-		echo "Setting the ${blue}user$end password..."
-		passwd $username
-
+		
 		while true; do
 		# AUR helper
-		read -rp "Do you want to install ${yellow}paru$end? [n] " aur
+		read -rp "Install ${yellow}paru$end? [n] " aur
 		case $aur in
 			yes | y )
 				pacman -S git --noconfirm
@@ -136,7 +153,7 @@ case $user in
 				
 		esac
 		done # while loop
-
+		
 		break
 		;;
 		
@@ -144,7 +161,7 @@ case $user in
 		echo "Skipping..."
 		break
 		;;
-
+	
 	* )
 		echo "${red}Invalid option!$end"
 		echo ""
@@ -157,7 +174,7 @@ clear
 
 while true; do
 # network setup
-read -rp "Want to use ${yellow}systemd-networkd$end? [y] " network
+read -rp "Configure ${yellow}systemd-networkd$end? [y] " network
 
 case $network in
 	yes | y | "" )
@@ -166,16 +183,16 @@ case $network in
 		ip a | grep "<" | cut -d':' -f2 | cut -c 2-
 		echo ""
 		read -rp "Select your ${yellow}interface$end: " interface
-	
+		
 		echo ""
-
+		
 		echo "Enabling needed services and writing configuration file..."
 		systemctl enable systemd-networkd systemd-resolved
 		echo "[Match]" >> /etc/systemd/network/20-wired.network
 		echo "Name=$interface" >> /etc/systemd/network/20-wired.network
 		echo "[Network]" >> /etc/systemd/network/20-wired.network
 		echo "DHCP=yes" >> /etc/systemd/network/20-wired.network
-
+		
 		break
 		;;
 		
@@ -183,7 +200,7 @@ case $network in
 		echo "Skipping..."
 		break
 		;;
-
+	
 	* )
 		echo "${red}Invalid option!$end"
 		echo ""
@@ -195,27 +212,37 @@ echo ""
 
 while true; do
 # swapfile
-read -rp "Want a ${yellow}Swapfile$end? [y] " swap
+read -rp "Use a ${yellow}Swapfile$end? [y] " swap
 echo ""
 
 case $swap in
 	yes | y | "" )
-		read -rp "How big should the Swapfile be (in MiB)? [1024] " swapsize
+		read -rp "Swapfile size (in MiB) [1024]:  " swapsize
 
 		# if no input is given, default to 1024
 		case "$swapsize" in
 			"" ) swapsize=1024 ;;
 		esac
-
+		
 		echo ""
-
+		
 		echo "Making Swap..."
-		dd if=/dev/zero of=/swapfile bs=1M count=$swapsize status=progress
-		chmod 600 /swapfile
-		mkswap /swapfile
-		swapon /swapfile
-		echo "/swapfile none swap defaults 0 0" >> /etc/fstab
-
+		case $fs in
+			btrfs )
+				echo "Swapfiles aren't supported on btrfs"
+				echo "(well I can't get them to work)"
+				break
+				;;
+			* )	
+				dd if=/dev/zero of=/swapfile bs=1M count=$swapsize status=progress
+				chmod 600 /swapfile
+				mkswap /swapfile
+				swapon /swapfile
+				echo "/swapfile none swap defaults 0 0" >> /etc/fstab
+				break
+				;;		
+		esac
+		
 		echo ""
 		break
 		;;
@@ -224,7 +251,7 @@ case $swap in
 		echo "Skipping..."
 		break
 		;;
-
+	
 	* )
 		echo "${red}Invalid option!$end"
 		echo ""
@@ -245,7 +272,7 @@ echo ""
 
 while true; do
 # read CPU vendor (for microcode)
-read -rp "Do you have an ${blue}Intel$end or ${red}AMD$end CPU? (lowercase pls) " cpu
+read -rp "${blue}Intel$end or ${red}AMD$end CPU? (lowercase pls) " cpu
 
 case $cpu in
 	intel | amd )
@@ -279,7 +306,7 @@ case $boot in
 		echo ""
 		grub-mkconfig -o /boot/grub/grub.cfg
 		;;
-
+	
 	bios )
 		pacman -S grub "$cpu"-ucode --noconfirm
 		echo ""
