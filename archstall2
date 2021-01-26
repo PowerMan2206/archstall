@@ -279,13 +279,20 @@ done # while loop
 # bootloader
 echo "Installing GRUB..."
 echo ""
+removable = 'no'
+if [[ $boot == uefi ]]; do
+	read -rp "Do you want to automatically set the disk as your default boot option?" removable
+done
 
 # different installation methods based on the boot mode
 case $boot in
 	uefi )
 		pacman -S grub efibootmgr "$cpu"-ucode --noconfirm
 		echo ""
-		grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB
+		case $removable in
+			yes | y ) grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB --removable ;;
+			no | n ) grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB ;;
+		esac
 		echo ""
 		grub-mkconfig -o /boot/grub/grub.cfg
 		;;
