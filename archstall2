@@ -99,7 +99,6 @@ case $user in
 		esac
 
 		useradd -m "$username"
-		echo ""
 		echo "Setting the ${blue}user$end password..."
 		passwd $username
 		
@@ -200,14 +199,12 @@ echo ""
 
 case $swap in
 	yes | y | "" )
-		read -rp "Swapfile size (in MiB) [1024]:  " swapsize
+		read -rp "Swapfile size (in MiB) [1024]: " swapsize
 
 		# if no input is given, default to 1024
 		case "$swapsize" in
 			"" ) swapsize=1024 ;;
 		esac
-		
-		echo ""
 		
 		echo "Making Swap..."
 		case $fs in

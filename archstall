@@ -311,6 +311,8 @@ echo "$dm" > /mnt/dm
 echo "$de" > /mnt/de
 echo "$fs" > /mnt/fs
 
+echo ""
+
 # chroot in and run the second script
 arch-chroot /mnt /archstall2
 
