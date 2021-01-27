@@ -156,10 +156,10 @@ clear
 
 while true; do
 # network setup
-read -rp "Configure ${yellow}systemd-networkd$end? [y] " network
+read -rp "Configure ${yellow}(s)ystemd-networkd$end, ${yellow}(N)etworkManager$end, or (s)kip? [systemd-networkd] " network
 
 case $network in
-	yes | y | "" )
+	systemd-networkd | s | "" )
 		echo ""
 		# takes the long `ip a` output and shortens it down to just the interfaces
 		ip a | grep "<" | cut -d':' -f2 | cut -c 2-
@@ -177,8 +177,19 @@ case $network in
 		
 		break
 		;;
+
+	NetworkManager | networkmanager | N | n )
+		echo ""
+		echo "Installing NetworkManager..."
+		pacman -S networkmanager --noconfirm
+		echo ""
+		echo "Enabling the needed service..."
+		systemctl enable NetworkManager
+
+		break
+		;;
 		
-	no | n )
+	skip | s )
 		echo "Skipping..."
 		break
 		;;
