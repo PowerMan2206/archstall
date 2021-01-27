@@ -48,6 +48,10 @@ if [[ -d /sys/firmware/efi/efivars ]]; then
 else
 	boot="bios"
 	echo "System booted in ${bold}BIOS$end mode"
+	echo "The installer will install Arch Linux in a way so that it's bootable in ${bold}BIOS$end mode."
+	echo "Reboot into ${bold}UEFI$end mode if you want to install for that."
+	echo ""
+	read -rd "Press any key to continue or Ctrl+C to cancel..."
 fi
 
 echo ""
