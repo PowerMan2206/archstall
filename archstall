@@ -51,7 +51,7 @@ else
 	echo "The installer will install Arch Linux in a way so that it's bootable in ${bold}BIOS$end mode."
 	echo "Reboot into ${bold}UEFI$end mode if you want to install for that."
 	echo ""
-	read -rd "Press any key to continue or Ctrl+C to cancel..."
+	read -rp "Press any key to continue or Ctrl+C to cancel..."
 fi
 
 echo ""
