@@ -151,11 +151,10 @@ case $partitioning in
 				echo "${red}Invalid option!$end"
 				echo ""
 				;;
-
-		sleep 1
-		
 		esac
 		done # while loop
+
+		sleep 1
 		
 		echo ""
 		
