@@ -128,7 +128,7 @@ case $partitioning in
 	manual | m )
 		echo ""
 		while true; do
-		read -rp "Do you want to use (f)disk, (c)fdisk, or (p)arted? [fdisk] " partitioner
+		read -rp "Do you want to use (f)disk, (c)fdisk, (p)arted, or (s)kip? [fdisk] " partitioner
 		
 		case $partitioner in
 			f | fdisk | "" ) 
@@ -143,10 +143,16 @@ case $partitioning in
 				parted /dev/"$disk" 
 				break
 				;;
+			s | skip ) 
+				echo "Skipping..." 
+				break
+				;;
 			* )
 				echo "${red}Invalid option!$end"
 				echo ""
 				;;
+
+		sleep 1
 		
 		esac
 		done # while loop
