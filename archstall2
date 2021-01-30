@@ -106,7 +106,7 @@ case $user in
 		groupadd sudo
 		# adding user to sudo group and making the sudo group have sudo stuff
 		gpasswd -a "$username" sudo
-		sed -i 's/# %sudo/%sudo/' /etc/sudoers
+		sed -i 's/# %sudo/%sudo/g' /etc/sudoers
 		
 		while true; do
 		# AUR helper
