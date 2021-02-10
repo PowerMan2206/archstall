@@ -5,7 +5,7 @@ Simple Arch Linux installer.
 To use the script, run 
 
 ```
-curl https://raw.githubusercontent.com/PowerMan2206/archstall/master/archstall > archstall
+curl -L https://git.io/JtoeR > archstall
 bash archstall
 ```
 
