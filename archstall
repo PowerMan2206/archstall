@@ -13,9 +13,12 @@ bold=$(tput bold)
 italic=$(tput sitm)
 end=$(tput sgr0)
 
+# exit if a command fails
+set -e
+
 case $1 in
 	--help | -h )
-		echo "${bold}${green}Archstall Arch Linux installer$end"
+		echo "${bold}${green}Archstall Arch Linux installer $end"
 		echo "This script is made by PowerMan2206"
 		echo "https://github.com/PowerMan2206/archstall"
 		echo ""
@@ -163,19 +166,14 @@ case $partitioning in
 				lsblk
 				echo ""
 				read -rp "What's the ${bold}EFI$end partition? " efipartition
-				echo ""
-				read -rp "What's the ${bold}root$end partition? " rootpartition
-				echo ""
 				echo "${green}Formatting the EFI partition to FAT32...$end"
 				mkfs.fat -F32 /dev/"$efipartition"
 				;;
-			
-			bios )
-				lsblk
-				echo ""
-				read -rp "What's the ${bold}root$end partition? " rootpartition
-				;;
 		esac
+
+		echo ""
+		read -rp "What's the ${bold}root$end partition? " rootpartition
+		echo ""
 		
 		break
 		;;	
@@ -314,11 +312,7 @@ echo "${green}Downloading the second script...$end"
 echo ""
 curl https://raw.githubusercontent.com/PowerMan2206/archstall/master/archstall2 > /mnt/archstall2
 chmod +x /mnt/archstall2
-echo "$boot" > /mnt/bootmode
-echo "$disk" > /mnt/diskthing
-echo "$dm" > /mnt/dm
-echo "$de" > /mnt/de
-echo "$fs" > /mnt/fs
+declare -p boot disk dm de fs > /mnt/varstuff
 
 echo ""
 
@@ -329,7 +323,7 @@ clear
 
 # cleanup
 echo "Cleaning up files..."
-rm /mnt/archstall2 /mnt/bootmode /mnt/diskthing /mnt/dm /mnt/de /mnt/fs
+rm /mnt/archstall2 /mnt/varstuff
 
 echo ""
 

@@ -13,12 +13,11 @@ blue=$(tput setaf 4)
 bold=$(tput bold)
 end=$(tput sgr0)
 
+# exit if a command fails
+set -e
+
 # set the variables
-boot=$(cat /bootmode)
-disk=$(cat /diskthing)
-dm=$(cat /dm)
-de=$(cat /de)
-fs=$(cat /fs)
+source /varstuff
 
 while true; do
 # select timezone region
