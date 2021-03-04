@@ -307,12 +307,19 @@ genfstab -U /mnt >> /mnt/etc/fstab
 
 clear
 
-# downloading the second script from GitHub and preparing stuff
+# downloading the second script from GitHub
 echo "${green}Downloading the second script...$end"
 echo ""
 curl https://raw.githubusercontent.com/PowerMan2206/archstall/master/archstall2 > /mnt/archstall2
 chmod +x /mnt/archstall2
-declare -p boot disk dm de fs > /mnt/varstuff
+
+# declare stuff
+echo "Declaring variables..."
+if [ -n "de" ]; then
+	declare -p boot disk dm de fs > /mnt/varstuff
+else
+	declare -p boot disk fs > /mnt/varstuff
+fi
 
 echo ""
 
