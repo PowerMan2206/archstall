@@ -315,7 +315,7 @@ chmod +x /mnt/archstall2
 
 # declare stuff
 echo "Declaring variables..."
-if [ -n "de" ]; then
+if [ -n "$de" ]; then
 	declare -p boot disk dm de fs > /mnt/varstuff
 else
 	declare -p boot disk fs > /mnt/varstuff
