@@ -54,7 +54,7 @@ else
 	echo "The installer will install Arch Linux in a way so that it's bootable in ${bold}BIOS$end mode."
 	echo "Reboot into ${bold}UEFI$end mode if you want to install for that."
 	echo ""
-	read -rp "Press any key to continue or Ctrl+C to cancel..."
+	read -rp "Press enter to continue or Ctrl+C to cancel..."
 fi
 
 echo ""
@@ -65,10 +65,46 @@ timedatectl set-ntp true; sleep 1
 
 echo ""
 
-# download the package list
-echo "${green}Downloading the package list...$end"
-echo ""
-curl https://raw.githubusercontent.com/PowerMan2206/archstall/master/packages > packages
+# create the package list
+cat << EOF > packages
+base
+base-devel
+linux
+#linux-lts
+linux-firmware
+
+man-db
+
+nano
+#micro
+#vim
+
+# window managers
+#i3-gaps
+#bspwm
+#openbox
+#xmonad
+#awesome
+#herbstluftwm
+
+# desktop environments (best to choose only one)
+# a display manager gets automatically installed depending on which desktop environment you select
+#gnome
+#plasma
+#lxqt
+#mate
+#xfce4 
+#xfce4-goodies
+
+# browsers
+#firefox
+#chromium
+#qutebrowser
+
+# other stuff
+neofetch
+#pulseaudio
+EOF
 
 clear
 
@@ -80,12 +116,12 @@ echo ""
 
 while true; do
 # automatic or manual disk partitioning?
-read -rp "Want (a)utomatic or (m)anual disk partitioning? [automatic] " partitioning 
+read -rp "(a)utomatic, (m)anual, or (s)kip disk partitioning? [automatic] " partitioning 
+echo ""
 
 case $partitioning in
 	# automatic partitioning
 	automatic | a | "" )
-		echo ""
 		case $boot in
 			uefi )
 				echo "The disk will be partitioned into a 512M EFI partition (${disk}1) and the root partition (${disk}2) taking up the rest"
@@ -97,6 +133,19 @@ case $partitioning in
 		
 		echo "$bold${red}WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK $end"
 		read -rp "Are you sure you want to continue? You can cancel with Ctrl+C "
+		echo ""
+
+		# for loops are for nerds
+		echo "Erasing disk in 5..."
+		sleep 1
+		echo "Erasing disk in 4..."
+		sleep 1
+		echo "Erasing disk in 3..."
+		sleep 1
+		echo "Erasing disk in 2..."
+		sleep 1
+		echo "Erasing disk in 1..."
+		sleep 1
 		echo ""
 		
 		case $boot in
@@ -129,9 +178,8 @@ case $partitioning in
 	
 	# manual partitioning
 	manual | m )
-		echo ""
 		while true; do
-		read -rp "Do you want to use (f)disk, (c)fdisk, (p)arted, or (s)kip? [fdisk] " partitioner
+		read -rp "Do you want to use (f)disk, (c)fdisk or (p)arted? [fdisk] " partitioner
 		
 		case $partitioner in
 			f | fdisk | "" ) 
@@ -146,24 +194,38 @@ case $partitioning in
 				parted /dev/"$disk" 
 				break
 				;;
-			s | skip ) 
-				echo "Skipping..." 
-				break
-				;;
 			* )
 				echo "${red}Invalid option!$end"
 				echo ""
 				;;
 		esac
 		done # while loop
+				
+		selectdisk=y
+		break
+		;;
 
-		sleep 1
-		
+	skip | s )
+		echo "Skipping..."
+		selectdisk=y
+		break
+		;;
+	
+	* )
+		echo "${red}Invalid option!$end"
 		echo ""
+		;;
+
+esac
+done # while loop
+
+case $selectdisk in
+	y )
+		sleep 1
+		lsblk
 		
 		case $boot in
 			uefi )
-				lsblk
 				echo ""
 				read -rp "What's the ${bold}EFI$end partition? " efipartition
 				echo "${green}Formatting the EFI partition to FAT32...$end"
@@ -173,18 +235,9 @@ case $partitioning in
 
 		echo ""
 		read -rp "What's the ${bold}root$end partition? " rootpartition
-		echo ""
-		
-		break
-		;;	
-	
-	* )
-		echo "${red}Invalid option!$end"
-		echo ""
+		echo ""	
 		;;
-
 esac
-done # while loop
 
 while true; do
 read -rp "Select the root filesystem: ext(4), (x)fs, (b)trfs [ext4] " fs
@@ -342,5 +395,5 @@ echo ""
 
 # reboot
 echo "${bold}${green}Installation finished!$end"
-read -rp "Press any key to reboot... "
+read -rp "Press enter to reboot... "
 reboot
