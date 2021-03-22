@@ -1,6 +1,10 @@
 # Archstall
 Simple Arch Linux installer.
 
+*10/10 best Arch installer ever* - Linus Torvalds maybe
+
+*what is archstall and why are you in my house* - Judd Vinet perhaps 
+
 ## Usage
 To use the script, run 
 
