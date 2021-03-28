@@ -473,7 +473,12 @@ while true; do
 read -rp "Add a ${blue}user$end? [y] " user
 case $user in
 	yes | y | "" )
-		read -rp "What do you want to name your ${blue}user$end? [user] " username
+		read -rp "What do you want to name your ${blue}user$end? [user] " usernametmp
+
+		# make it lowercase
+		username="${usernametmp,,}"
+
+		# default to user username
 		case $username in
 				"" ) username="user" ;;
 		esac
