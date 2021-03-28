@@ -16,30 +16,43 @@ end=$(tput sgr0)
 # exit if a command fails
 set -e
 
-case $1 in
-	--help | -h )
-		echo "${bold}${green}Archstall Arch Linux installer $end"
-		echo "This script is made by PowerMan2206"
-		echo "https://github.com/PowerMan2206/archstall"
-		echo ""
-		echo "Usage:"
-		echo "${bold}  --help | -h$end"
-		echo "    show this help menu and exit"
-		echo "${bold}  just running the script$end"
-		echo "    run Archstall"
-		echo ""
-		echo "${italic}more coming soon maybe$end"
-		echo ""
-		
-		exit
-		;;
-esac
+# some default vars
+removable=n
+device=regular
+dm=n
+de=n
+
+while getopts "hr" arg; do
+	case $arg in
+		h | help )
+			echo "${bold}${green}Archstall Arch Linux installer $end"
+			echo "This script is made by PowerMan2206"
+			echo "https://github.com/PowerMan2206/archstall"
+			echo ""
+			echo "Usage:"
+			echo "${bold}  --help | -h$end"
+			echo "    show this help menu and exit"
+			echo "${bold}  --removable | -r$end"
+			echo "    install on a removable device"
+			echo "${bold}${italic}  just running the script$end"
+			echo "    run Archstall"
+			echo ""
+			echo "${italic}more coming soon maybe$end"
+			echo ""
+			
+			exit
+			;;
+			
+		r | removable ) removable=y; device=removable ;;
+	esac
+done
 
 clear
 
 echo "${bold}${green}Archstall Arch Linux installer $end"
 echo "${red}This script comes with no warranty, screwing up your system is your fault
 You can cancel the script at any time by holding down Ctrl+C $end"
+echo "Installation for a $device device"
 echo ""
 read -rp "Press any key to continue... "
 echo ""
@@ -66,7 +79,7 @@ timedatectl set-ntp true; sleep 1
 echo ""
 
 # create the package list
-cat << EOF > packages
+cat << 'EOF' > packages
 base
 base-devel
 linux
@@ -103,10 +116,18 @@ nano
 
 # other stuff
 neofetch
+#xorg
 #pulseaudio
 EOF
 
 clear
+
+# unmount any thing in /mnt
+if [[ $(findmnt /mnt) ]]; then
+    echo "Unmounting disks in /mnt..."
+    umount -R /mnt
+    echo ""
+fi
 
 # get the disk to partition
 lsblk
@@ -150,25 +171,27 @@ case $partitioning in
 		
 		case $boot in
 			uefi )
-				parted /dev/"$disk" mklabel gpt
+				parted -s /dev/"$disk" mklabel gpt
 				
 				echo "${green}Making the ${bold}EFI partition...$end"
-				parted /dev/"$disk" mkpart P1 1MiB 512MiB
-				echo "${green}Formatting the EFI partition to FAT32...$end"
+				parted -s /dev/"$disk" mkpart P1 1MiB 512MiB
+
+				echo "${green}Formatting the  ${bold}EFI partition$end ${green}to FAT32...$end"
 				mkfs.fat -F32 /dev/"${disk}"1
 				efipartition="${disk}"1
 				echo ""
+				
 				echo "${green}Making the ${bold}root partition...$end"
-				parted /dev/"$disk" mkpart P2 512MiB 100%
+				parted -s /dev/"$disk" mkpart P2 512MiB 100%
 				rootpartition="${disk}"2
 				;;
 				
 			bios )
-				parted /dev/"$disk" mklabel msdos
+				parted -s /dev/"$disk" mklabel msdos
 				
 				echo "${green}Making the ${bold}root partition...$end"
-				parted /dev/"$disk" mkpart primary 1MiB 100%
-				parted /dev/"$disk" set 1 boot on
+				parted -s /dev/"$disk" mkpart primary 1MiB 100%
+				parted -s /dev/"$disk" set 1 boot on
 				rootpartition="${disk}"1
 				;;
 		esac
@@ -227,8 +250,8 @@ case $selectdisk in
 		case $boot in
 			uefi )
 				echo ""
-				read -rp "What's the ${bold}EFI$end partition? " efipartition
-				echo "${green}Formatting the EFI partition to FAT32...$end"
+				read -rp "What's the ${bold}EFI partition? $end" efipartition
+				echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
 				mkfs.fat -F32 /dev/"$efipartition"
 				;;
 		esac
@@ -241,19 +264,18 @@ esac
 
 while true; do
 read -rp "Select the root filesystem: ext(4), (x)fs, (b)trfs [ext4] " fs
+echo ""
 
 case $fs in
 	ext4 | 4 | "" )
-		echo ""
-		echo "Formatting the root partition to ext4..."
-		mkfs.ext4 /dev/"$rootpartition"
+		echo "${green}Formatting the ${bold}root partition$end ${green}to ext4...$end"
+		mkfs.ext4 -q /dev/"$rootpartition"
 		fs=ext4
 		break
 		;;
 		
 	btrfs | b )
-		echo ""
-		echo "Formatting the root partition to btrfs..."
+		echo "${green}Formatting the ${bold}root partition$end ${green}to btrfs...$end"
 		mkfs.btrfs -f /dev/$rootpartition
 		btrfs subvolume create /
 		fs=btrfs
@@ -261,9 +283,8 @@ case $fs in
 		;;
 		
 	xfs | x )
-		echo ""
-		echo "Formatting the root partition to xfs..."
-		mkfs.xfs -f /dev/"$rootpartition"
+		echo "${green}Formatting the ${bold}root partition$end ${green}to xfs...$end"
+		mkfs.xfs -f -q /dev/"$rootpartition"
 		echo "xfsprogs" >> packages
 		fs=xfs
 		break
@@ -303,14 +324,8 @@ while true; do
 read -rp "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
 
 case $editor in
-	nano | n | "" )
-		nano packages
-		break
-		;;
-	vim | v )
-		vim packages
-		break
-		;;
+	nano | n | "" ) nano packages; break ;;
+	vim | v ) vim packages; break ;;
 	skip | s )
 		echo ""
 		echo "Skipping package list editing..."
@@ -332,16 +347,17 @@ grep -v "#" packages > packagesclean
 echo ""
 
 # put the DE service in a variable and install extra packages if needed
+
 if grep -Fxq "gnome" packagesclean; then
 	dm="gdm"
-	de="y"
+	de=y
 elif grep -Fxq "plasma" packagesclean; then
 	dm="sddm"
-	de="y"
+	de=y
 	echo "konsole" >> packagesclean
 elif grep -Fxq "lxqt" packagesclean || grep -Fxq "mate" packagesclean || grep -Fxq "xfce4" packagesclean; then
 	dm="lightdm"
-	de="y"
+	de=y
 	echo "lightdm" >> packagesclean
 	echo "lightdm-gtk-greeter" >> packagesclean
 	echo "xorg-server" >> packagesclean
@@ -360,19 +376,337 @@ genfstab -U /mnt >> /mnt/etc/fstab
 
 clear
 
-# downloading the second script from GitHub
-echo "${green}Downloading the second script...$end"
+# write the second script
+echo "${green}Writing the second script...$end"
 echo ""
-curl https://raw.githubusercontent.com/PowerMan2206/archstall/master/archstall2 > /mnt/archstall2
+
+#----------------------------------------------------------------------------------------------------------------------
+#======================================================================================================================
+# START OF SCRIPT 2
+cat << 'EOF' > /mnt/archstall2
+#!/bin/bash
+
+# set style variables
+red=$(tput setaf 1)
+green=$(tput setaf 2)
+yellow=$(tput setaf 3)
+blue=$(tput setaf 4)
+bold=$(tput bold)
+end=$(tput sgr0)
+
+# exit if a command fails
+set -e
+
+# set the variables
+source /varstuff
+
+while true; do
+# select timezone region
+ls /usr/share/zoneinfo
+echo ""
+read -rp "Select your ${yellow}region$end: " region
+
+if [[ -d /usr/share/zoneinfo/"$region" ]]; then
+	while true; do
+	# same but for city
+	echo ""
+	ls /usr/share/zoneinfo/"$region"
+	echo ""
+	read -rp "Select your ${yellow}city$end: " city
+	
+	if [[ -f /usr/share/zoneinfo/"$region"/"$city" ]]; then
+		echo ""
+		echo "Setting the ${bold}timezone$end..."
+		ln -sf /usr/share/zoneinfo/"$region"/"$city" /etc/localtime
+		break
+	else :
+		echo "${red}Invalid option!$end"
+	fi
+	
+	done # while loop
+	break
+
+elif [[ -f /usr/share/zoneinfo/"$region" ]]; then
+	echo "Setting the ${bold}timezone$end..."
+	ln -sf /usr/share/zoneinfo/"$region" /etc/localtime
+	break
+
+else : 
+	echo "${red}Invalid option!$end"
+	echo ""
+fi
+
+done # while loop
+
+echo ""
+
+# somethingsomething time
+echo "Generating ${bold}/etc/adjtime$end..."
+hwclock --systohc
+
+echo ""
+
+# locale stuff (???)
+echo "Setting the ${bold}locale$end..."
+sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g' /etc/locale.gen
+locale-gen
+echo "LANG=en_US.UTF-8" > /etc/locale.conf
+
+echo ""
+
+read -rp "${yellow}hostname$end [localhost] : " hostname
+echo ""
+echo "Setting the ${yellow}hostname$end..."
+case $hostname in
+	"" ) echo localhost > /etc/hostname ;;
+	*  ) echo "$hostname" > /etc/hostname ;;
+esac
+
+echo ""
+
+echo "Setting the ${red}root$end password..."
+passwd
+
+echo ""
+
+while true; do
+read -rp "Add a ${blue}user$end? [y] " user
+case $user in
+	yes | y | "" )
+		read -rp "What do you want to name your ${blue}user$end? [user] " username
+		case $username in
+				"" ) username="user" ;;
+		esac
+
+		useradd -m "$username"
+		echo "Setting the ${blue}user$end password..."
+		passwd $username
+		
+		# create sudo group
+		groupadd sudo
+		# adding user to sudo group and making the sudo group have sudo stuff
+		gpasswd -a "$username" sudo
+		sed -i 's/# %sudo/%sudo/g' /etc/sudoers
+		
+		while true; do
+		# AUR helper
+		read -rp "Install ${yellow}paru$end? [n] " aur
+		case $aur in
+			yes | y )
+				pacman -S git --noconfirm
+				cd /home/$username
+				sudo -u $username git clone https://aur.archlinux.org/paru-bin.git
+				cd paru-bin
+				sudo -u $username makepkg -si --noconfirm
+				cd ..
+				rm -rf paru-bin
+				break
+				;;
+				
+			no | n | "" )
+				echo "Skipping..."
+				break
+				;;
+				
+			* )
+				echo "${red}Invalid option!$end"
+				echo ""
+				;;
+				
+		esac
+		done # while loop
+		
+		break
+		;;
+		
+	no | n )
+		echo "Skipping..."
+		break
+		;;
+	
+	* )
+		echo "${red}Invalid option!$end"
+		echo ""
+		;;
+	
+esac 
+done # while loop
+
+clear
+
+while true; do
+# network setup
+read -rp "Configure ${yellow}systemd-network(d)$end, ${yellow}(N)etworkManager$end, or (s)kip? [systemd-networkd] " network
+
+case $network in
+	systemd-networkd | d | "" )
+		echo ""
+		# takes the long `ip a` output and shortens it down to just the interfaces
+		ip a | grep "<" | cut -d':' -f2 | cut -c 2-
+		echo ""
+		read -rp "Select your ${yellow}interface$end: " interface
+		
+		echo ""
+		
+		echo "Enabling needed services and writing configuration file..."
+		systemctl enable systemd-networkd systemd-resolved
+		echo "[Match]" >> /etc/systemd/network/20-wired.network
+		echo "Name=$interface" >> /etc/systemd/network/20-wired.network
+		echo "[Network]" >> /etc/systemd/network/20-wired.network
+		echo "DHCP=yes" >> /etc/systemd/network/20-wired.network
+		
+		break
+		;;
+
+	NetworkManager | networkmanager | N | n )
+		echo ""
+		echo "Installing NetworkManager..."
+		pacman -S networkmanager --noconfirm
+		echo ""
+		echo "Enabling the needed service..."
+		systemctl enable NetworkManager
+
+		break
+		;;
+		
+	skip | s )
+		echo "Skipping..."
+		break
+		;;
+	
+	* )
+		echo "${red}Invalid option!$end"
+		echo ""
+		;;
+esac
+done # while loop
+
+echo ""
+
+while true; do
+# swapfile
+read -rp "Use a ${yellow}Swapfile$end? [n] " swap
+echo ""
+
+case $swap in
+	yes | y )
+		read -rp "Swapfile size (in MiB) [1024]: " swapsize
+
+		# if no input is given, default to 1024
+		case "$swapsize" in
+			"" ) swapsize=1024 ;;
+		esac
+		
+		echo "Making Swap..."
+		case $fs in
+			btrfs )
+				echo "Swapfiles aren't supported on btrfs"
+				echo "(well I can't get them to work)"
+				break
+				;;
+			* )	
+				dd if=/dev/zero of=/swapfile bs=1M count=$swapsize status=progress
+				chmod 600 /swapfile
+				mkswap /swapfile
+				swapon /swapfile
+				echo "/swapfile none swap defaults 0 0" >> /etc/fstab
+				break
+				;;		
+		esac
+		
+		echo ""
+		break
+		;;
+		
+	no | n | "" )
+		echo "Skipping..."
+		break
+		;;
+	
+	* )
+		echo "${red}Invalid option!$end"
+		echo ""
+		;;
+				
+esac
+done # while loop
+
+# enable services
+case $de in
+	y )
+		echo "Enabling the DE-specific service..."
+		systemctl enable "$dm"
+		;;
+esac
+
+echo ""
+
+echo "Installing the CPU microcode..."
+case $removable in
+	y )
+		# kinda hacky but it works
+		pacman -S amd-ucode intel-ucode --noconfirm
+		;;
+	n )
+		while true; do
+		# read CPU vendor (for microcode)
+		read -rp "${blue}Intel$end or ${red}AMD$end CPU? (lowercase pls) " cpu
+		
+		case $cpu in
+			a | A | amd | AMD ) pacman -S amd-ucode --noconfirm; break ;;
+			i | I | intel | Intel ) pacman -S intel-ucode --noconfirm; break ;;
+			* )	
+				echo "${red}Invalid option!$end"
+				echo ""
+				;;
+		esac
+		
+		done # while loop
+		;;
+esac
+
+# bootloader
+echo "Installing GRUB..."
+echo ""
+
+# different installation methods based on the boot mode
+case $boot in
+	uefi )
+		pacman -S grub efibootmgr --noconfirm
+		echo ""
+		case $removable in
+			y ) grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB --removable --recheck ;;
+			n ) grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB ;;
+		esac
+		;;
+	
+	bios )
+		pacman -S grub --noconfirm
+		echo ""
+		case $removable in
+			y ) grub-install /dev/"$disk" --recheck ;;
+			n ) grub-install /dev/"$disk" ;;
+		esac
+		;;
+esac
+
+# make le grub config
+echo ""
+echo "Writing GRUB configuration file..."
+grub-mkconfig -o /boot/grub/grub.cfg
+
+exit
+
+EOF
+# END OF SCRIPT 2
+#======================================================================================================================
+#----------------------------------------------------------------------------------------------------------------------
+
 chmod +x /mnt/archstall2
 
 # declare stuff
 echo "Declaring variables..."
-if [ -n "$de" ]; then
-	declare -p boot disk dm de fs > /mnt/varstuff
-else
-	declare -p boot disk fs > /mnt/varstuff
-fi
+declare -p boot disk dm de fs removable > /mnt/varstuff
 
 echo ""
 
