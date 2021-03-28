@@ -8,12 +8,14 @@ Simple Arch Linux installer.
 ## Usage
 To use the script, run 
 
-```
+```bash
 curl -L https://git.io/JtoeR > archstall
-bash archstall
+bash archstall [-r]
 ```
 
 from a booted Arch live environment. Follow the instructions and you're golden.
+
+`bash archstall -h` for a lil' help thing
 
 ## why
 Well I don't like other Arch installers so I just made this.
