@@ -54,8 +54,8 @@ echo "${red}This script comes with no warranty, screwing up your system is your 
 You can cancel the script at any time by holding down Ctrl+C $end"
 echo "Installation for a $device device"
 echo ""
-read -rp "Press any key to continue... "
-echo ""
+read -n 1 -rsp "Press any key to continue... "
+echo ""; echo ""
 
 # check the boot mode
 if [[ -d /sys/firmware/efi/efivars ]]; then
@@ -67,7 +67,8 @@ else
 	echo "The installer will install Arch Linux in a way so that it's bootable in ${bold}BIOS$end mode."
 	echo "Reboot into ${bold}UEFI$end mode if you want to install for that."
 	echo ""
-	read -rp "Press enter to continue or Ctrl+C to cancel..."
+	read -n 1 -rsp "Press any key to continue or Ctrl+C to cancel..."
+	echo ""
 fi
 
 echo ""
@@ -76,86 +77,42 @@ echo ""
 echo "Ensuring the system clock is accurate..."
 timedatectl set-ntp true; sleep 1 
 
-echo ""
-
-# create the package list
-cat << 'EOF' > packages
-base
-base-devel
-linux
-#linux-lts
-linux-firmware
-
-man-db
-
-nano
-#micro
-#vim
-
-# window managers
-#i3-gaps
-#bspwm
-#openbox
-#xmonad
-#awesome
-#herbstluftwm
-
-# desktop environments (best to choose only one)
-# a display manager gets automatically installed depending on which desktop environment you select
-#gnome
-#plasma
-#lxqt
-#mate
-#xfce4 
-#xfce4-goodies
-
-# browsers
-#firefox
-#chromium
-#qutebrowser
-
-# other stuff
-neofetch
-#xorg
-#pulseaudio
-EOF
-
 clear
 
 # unmount any thing in /mnt
 if [[ $(findmnt /mnt) ]]; then
-    echo "Unmounting disks in /mnt..."
-    umount -R /mnt
-    echo ""
+	echo "Unmounting disks in /mnt..."
+	umount -R /mnt
+	echo ""
 fi
 
 # get the disk to partition
 lsblk
 echo ""
 read -rp "Select the disk you want to use ${red}(not a partition) $end" disk
+
 echo ""
 
 while true; do
 # automatic or manual disk partitioning?
-read -rp "(a)utomatic, (m)anual, or (s)kip disk partitioning? [automatic] " partitioning 
+read -n 1 -rp "(a)utomatic, (m)anual, or (s)kip disk partitioning? [automatic] " partitioning 
 echo ""
 
 case $partitioning in
 	# automatic partitioning
-	automatic | a | "" )
+	A | a | "" )
 		case $boot in
-			uefi )
-				echo "The disk will be partitioned into a 512M EFI partition (${disk}1) and the root partition (${disk}2) taking up the rest"
-				;;
-			bios )
-				echo "The disk will be partitioned into a single root partition taking up the entire disk (${disk}1)"
-				;;
+			uefi ) echo "The disk will be partitioned into a 512M ${bold}EFI partition$end (${disk}1) and the ${bold}root partition$end (${disk}2) taking up the rest" ;;
+			bios ) echo "The disk will be partitioned into a single ${bold}root partition$end taking up the entire disk (${disk}1)" ;;
 		esac
+
+		echo ""
 		
 		echo "$bold${red}WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK $end"
 		read -rp "Are you sure you want to continue? You can cancel with Ctrl+C "
-		echo ""
 
+		echo "$red"
+		
 		# for loops are for nerds
 		echo "Erasing disk in 5..."
 		sleep 1
@@ -167,20 +124,25 @@ case $partitioning in
 		sleep 1
 		echo "Erasing disk in 1..."
 		sleep 1
-		echo ""
+		
+		echo "$end"
 		
 		case $boot in
 			uefi )
 				parted -s /dev/"$disk" mklabel gpt
-				
+
+				# make EFI partition
 				echo "${green}Making the ${bold}EFI partition...$end"
 				parted -s /dev/"$disk" mkpart P1 1MiB 512MiB
 
-				echo "${green}Formatting the  ${bold}EFI partition$end ${green}to FAT32...$end"
+				# format EFI partition
+				echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
 				mkfs.fat -F32 /dev/"${disk}"1
 				efipartition="${disk}"1
-				echo ""
 				
+				echo ""
+
+				# make root partition
 				echo "${green}Making the ${bold}root partition...$end"
 				parted -s /dev/"$disk" mkpart P2 512MiB 100%
 				rootpartition="${disk}"2
@@ -188,7 +150,8 @@ case $partitioning in
 				
 			bios )
 				parted -s /dev/"$disk" mklabel msdos
-				
+
+				# make root partition
 				echo "${green}Making the ${bold}root partition...$end"
 				parted -s /dev/"$disk" mkpart primary 1MiB 100%
 				parted -s /dev/"$disk" set 1 boot on
@@ -200,23 +163,15 @@ case $partitioning in
 		;;
 	
 	# manual partitioning
-	manual | m )
+	M | m )
 		while true; do
-		read -rp "Do you want to use (f)disk, (c)fdisk or (p)arted? [fdisk] " partitioner
+		read -n 1 -rsp "Do you want to use (f)disk, (c)fdisk or (p)arted? [fdisk] " partitioner
+		echo ""
 		
 		case $partitioner in
-			f | fdisk | "" ) 
-				fdisk /dev/"$disk" 
-				break
-				;;
-			c | cfdisk ) 
-				cfdisk /dev/"$disk" 
-				break
-				;;
-			p | parted ) 
-				parted /dev/"$disk" 
-				break
-				;;
+			f | fdisk | "" ) fdisk /dev/"$disk"; break ;;
+			c | cfdisk ) cfdisk /dev/"$disk"; break ;;
+			p | parted ) parted /dev/"$disk"; break ;;
 			* )
 				echo "${red}Invalid option!$end"
 				echo ""
@@ -225,10 +180,11 @@ case $partitioning in
 		done # while loop
 				
 		selectdisk=y
+		clear
 		break
 		;;
 
-	skip | s )
+	S | s )
 		echo "Skipping..."
 		selectdisk=y
 		break
@@ -244,45 +200,47 @@ done # while loop
 
 case $selectdisk in
 	y )
+		echo ""
 		sleep 1
 		lsblk
 		
 		case $boot in
 			uefi )
 				echo ""
-				read -rp "What's the ${bold}EFI partition? $end" efipartition
+				read -rp "What's the ${bold}EFI partition${end}? " efipartition
 				echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
 				mkfs.fat -F32 /dev/"$efipartition"
 				;;
 		esac
-
+		
 		echo ""
-		read -rp "What's the ${bold}root$end partition? " rootpartition
-		echo ""	
+		read -rp "What's the ${bold}root partition${end}? " rootpartition
 		;;
 esac
 
+echo ""	
+
 while true; do
-read -rp "Select the root filesystem: ext(4), (x)fs, (b)trfs [ext4] " fs
+read -n 1 -rsp "Select the ${bold}root filesystem$end: ext(4), (x)fs, (b)trfs [ext4] " fs
 echo ""
 
 case $fs in
-	ext4 | 4 | "" )
+	E | e | 4 | "" )
 		echo "${green}Formatting the ${bold}root partition$end ${green}to ext4...$end"
 		mkfs.ext4 -q /dev/"$rootpartition"
 		fs=ext4
 		break
 		;;
-		
-	btrfs | b )
+	
+	B | b )
 		echo "${green}Formatting the ${bold}root partition$end ${green}to btrfs...$end"
 		mkfs.btrfs -f /dev/$rootpartition
-		btrfs subvolume create /
+		#btrfs subvolume create /
 		fs=btrfs
 		break
 		;;
 		
-	xfs | x )
+	X | x )
 		echo "${green}Formatting the ${bold}root partition$end ${green}to xfs...$end"
 		mkfs.xfs -f -q /dev/"$rootpartition"
 		echo "xfsprogs" >> packages
@@ -315,19 +273,63 @@ esac
 
 clear
 
+# create the package list
+echo "Writing the package list..."
+cat << 'EOF' > packages
+linux
+#linux-lts
+linux-firmware
+polkit
+
+nano
+#micro
+#vim
+
+# window managers
+#i3-gaps
+#bspwm
+#openbox
+#xmonad
+#awesome
+#herbstluftwm
+
+# desktop environments (best to choose only one)
+# a display manager gets automatically installed depending on which desktop environment you select
+#gnome
+#plasma
+#lxqt
+#mate
+#xfce4 
+#xfce4-goodies
+
+# browsers
+#firefox
+#chromium
+#qutebrowser
+
+# other stuff
+neofetch
+#man-db
+#pulseaudio
+#xorg
+EOF
+
+echo ""
+
 # edit package list
-echo "Add/uncomment packages which you want in the packages file"
-echo "(the ones already uncommented are basically must-haves)"
+echo "Add/uncomment packages which you want in the package list"
+echo "${yellow}Linux, the firmware, polkit, nano, and neofetch are installed by default$end"
+echo "(also base and base-devel are installed but you can't remove those because the installer dies)"
 echo ""
 
 while true; do
-read -rp "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
+read -n 1 -rsp "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
+echo ""
 
 case $editor in
-	nano | n | "" ) nano packages; break ;;
-	vim | v ) vim packages; break ;;
-	skip | s )
-		echo ""
+	N | n | "" ) nano packages; break ;;
+	V | v ) vim packages; break ;;
+	S | s )
 		echo "Skipping package list editing..."
 		break
 		;;
@@ -347,7 +349,6 @@ grep -v "#" packages > packagesclean
 echo ""
 
 # put the DE service in a variable and install extra packages if needed
-
 if grep -Fxq "gnome" packagesclean; then
 	dm="gdm"
 	de=y
@@ -364,9 +365,9 @@ elif grep -Fxq "lxqt" packagesclean || grep -Fxq "mate" packagesclean || grep -F
 fi
 
 # read the package list and install those packages
-echo "Installing the packages with pacstrap..."
-# actual installing
-pacstrap /mnt - < packagesclean
+echo "${green}Installing the packages with pacstrap...$end"
+echo ""
+pacstrap /mnt base base-devel - < packagesclean
 
 echo ""
 
@@ -375,6 +376,12 @@ echo "Generating the fstab..."
 genfstab -U /mnt >> /mnt/etc/fstab
 
 clear
+
+# declare stuff
+echo "Declaring variables..."
+declare -p boot disk dm de fs removable > /mnt/varstuff
+
+echo ""
 
 # write the second script
 echo "${green}Writing the second script...$end"
@@ -397,19 +404,20 @@ end=$(tput sgr0)
 # exit if a command fails
 set -e
 
-# set the variables
+# source the variables
 source /varstuff
 
-while true; do
-# select timezone region
+# select timezone stuff
 ls /usr/share/zoneinfo
 echo ""
+
+while true; do
 read -rp "Select your ${yellow}region$end: " region
+echo ""
 
 if [[ -d /usr/share/zoneinfo/"$region" ]]; then
 	while true; do
 	# same but for city
-	echo ""
 	ls /usr/share/zoneinfo/"$region"
 	echo ""
 	read -rp "Select your ${yellow}city$end: " city
@@ -421,6 +429,7 @@ if [[ -d /usr/share/zoneinfo/"$region" ]]; then
 		break
 	else :
 		echo "${red}Invalid option!$end"
+		echo ""
 	fi
 	
 	done # while loop
@@ -455,7 +464,6 @@ echo "LANG=en_US.UTF-8" > /etc/locale.conf
 echo ""
 
 read -rp "${yellow}hostname$end [localhost] : " hostname
-echo ""
 echo "Setting the ${yellow}hostname$end..."
 case $hostname in
 	"" ) echo localhost > /etc/hostname ;;
@@ -470,10 +478,11 @@ passwd
 echo ""
 
 while true; do
-read -rp "Add a ${blue}user$end? [y] " user
+read -n 1 -rsp "Add a ${yellow}user$end? [y] " user
+echo ""
 case $user in
-	yes | y | "" )
-		read -rp "What do you want to name your ${blue}user$end? [user] " usernametmp
+	Y | y | "" )
+		read -rp "What do you want to name your ${yellow}user$end? [user] " usernametmp
 
 		# make it lowercase
 		username="${usernametmp,,}"
@@ -483,9 +492,10 @@ case $user in
 				"" ) username="user" ;;
 		esac
 
+		echo "Adding user ${yellow}$username$end"
 		useradd -m "$username"
-		echo "Setting the ${blue}user$end password..."
-		passwd $username
+		echo "Setting the ${yellow}user$end password..."
+		passwd "$username"
 		
 		# create sudo group
 		groupadd sudo
@@ -495,10 +505,11 @@ case $user in
 		
 		while true; do
 		# AUR helper
-		read -rp "Install ${yellow}paru$end? [n] " aur
+		read -n 1 -rsp "Install ${yellow}paru$end? [n] " aur
+		echo ""
 		case $aur in
-			yes | y )
-				pacman -S git --noconfirm
+			Y | y )
+				pacman -S git base-devel --noconfirm
 				cd /home/$username
 				sudo -u $username git clone https://aur.archlinux.org/paru-bin.git
 				cd paru-bin
@@ -508,7 +519,7 @@ case $user in
 				break
 				;;
 				
-			no | n | "" )
+			N | n | "" )
 				echo "Skipping..."
 				break
 				;;
@@ -524,7 +535,7 @@ case $user in
 		break
 		;;
 		
-	no | n )
+	N | n )
 		echo "Skipping..."
 		break
 		;;
@@ -541,40 +552,41 @@ clear
 
 while true; do
 # network setup
-read -rp "Configure ${yellow}systemd-network(d)$end, ${yellow}(N)etworkManager$end, or (s)kip? [systemd-networkd] " network
+read -n 1 -rsp "Configure ${yellow}systemd-network(d)$end, ${yellow}(N)etworkManager$end, or (s)kip? [systemd-networkd] " network
+echo ""; echo ""
 
 case $network in
-	systemd-networkd | d | "" )
-		echo ""
+	D | d | "" )
 		# takes the long `ip a` output and shortens it down to just the interfaces
 		ip a | grep "<" | cut -d':' -f2 | cut -c 2-
 		echo ""
 		read -rp "Select your ${yellow}interface$end: " interface
 		
 		echo ""
+
+		# the cat EOF thing doesn't work
+		echo "Writing configuration file and enabling services..."
+		echo "[Match]" > /etc/systemd/network/20-network.network
+		echo "Name=$interface" >> /etc/systemd/network/20-network.network
+		echo "[Network]" >> /etc/systemd/network/20-network.network
+		echo "DHCP=yes" >> /etc/systemd/network/20-network.network
 		
-		echo "Enabling needed services and writing configuration file..."
 		systemctl enable systemd-networkd systemd-resolved
-		echo "[Match]" >> /etc/systemd/network/20-wired.network
-		echo "Name=$interface" >> /etc/systemd/network/20-wired.network
-		echo "[Network]" >> /etc/systemd/network/20-wired.network
-		echo "DHCP=yes" >> /etc/systemd/network/20-wired.network
 		
 		break
 		;;
 
-	NetworkManager | networkmanager | N | n )
-		echo ""
+	N | n )
 		echo "Installing NetworkManager..."
 		pacman -S networkmanager --noconfirm
 		echo ""
-		echo "Enabling the needed service..."
+		echo "Enabling service..."
 		systemctl enable NetworkManager
 
 		break
 		;;
 		
-	skip | s )
+	S | s )
 		echo "Skipping..."
 		break
 		;;
@@ -590,11 +602,11 @@ echo ""
 
 while true; do
 # swapfile
-read -rp "Use a ${yellow}Swapfile$end? [n] " swap
+read -n 1 -rsp "Use a ${blue}Swapfile$end? [n] " swap
 echo ""
 
 case $swap in
-	yes | y )
+	Y | y )
 		read -rp "Swapfile size (in MiB) [1024]: " swapsize
 
 		# if no input is given, default to 1024
@@ -623,7 +635,7 @@ case $swap in
 		break
 		;;
 		
-	no | n | "" )
+	N | n | "" )
 		echo "Skipping..."
 		break
 		;;
@@ -639,14 +651,16 @@ done # while loop
 # enable services
 case $de in
 	y )
-		echo "Enabling the DE-specific service..."
+		echo ""
+		echo "Enabling DE-specific service..."
 		systemctl enable "$dm"
 		;;
 esac
 
-echo ""
+clear
 
 echo "Installing the CPU microcode..."
+echo ""
 case $removable in
 	y )
 		# kinda hacky but it works
@@ -671,7 +685,8 @@ case $removable in
 esac
 
 # bootloader
-echo "Installing GRUB..."
+echo ""
+echo "${green}Installing GRUB...$end"
 echo ""
 
 # different installation methods based on the boot mode
@@ -709,13 +724,9 @@ EOF
 
 chmod +x /mnt/archstall2
 
-# declare stuff
-echo "Declaring variables..."
-declare -p boot disk dm de fs removable > /mnt/varstuff
-
-echo ""
-
 # chroot in and run the second script
+echo "${green}Chrooting...$end"
+echo ""
 arch-chroot /mnt /archstall2
 
 clear
@@ -734,5 +745,7 @@ echo ""
 
 # reboot
 echo "${bold}${green}Installation finished!$end"
-read -rp "Press enter to reboot... "
+read -n 1 -rsp  "Press any key to reboot... "
+echo ""
+
 reboot
