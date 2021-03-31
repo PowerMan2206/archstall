@@ -42,7 +42,7 @@ while getopts "hr" arg; do
 			
 			exit
 			;;
-			
+		
 		r | removable ) removable=y; device=removable ;;
 	esac
 done
@@ -62,6 +62,7 @@ if [[ -d /sys/firmware/efi/efivars ]]; then
 	boot="uefi"
 	echo "System booted in ${bold}UEFI$end mode"
 else
+	# notify user is booted in BIOS
 	boot="bios"
 	echo "System booted in ${bold}BIOS$end mode"
 	echo "The installer will install Arch Linux in a way so that it's bootable in ${bold}BIOS$end mode."
@@ -89,7 +90,16 @@ fi
 # get the disk to partition
 lsblk
 echo ""
+
+while true; do
 read -rp "Select the disk you want to use ${red}(not a partition) $end" disk
+if [[ "$(lsblk)" == *"$disk"* ]]; then
+	break
+else
+	echo "${red}Disk doesn't exist!$end"
+	echo ""
+fi
+done # while loop
 
 echo ""
 
@@ -105,12 +115,12 @@ case $partitioning in
 			uefi ) echo "The disk will be partitioned into a 512M ${bold}EFI partition$end (${disk}1) and the ${bold}root partition$end (${disk}2) taking up the rest" ;;
 			bios ) echo "The disk will be partitioned into a single ${bold}root partition$end taking up the entire disk (${disk}1)" ;;
 		esac
-
+		
 		echo ""
 		
 		echo "$bold${red}WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK $end"
 		read -rp "Are you sure you want to continue? You can cancel with Ctrl+C "
-
+		
 		echo "$red"
 		
 		# for loops are for nerds
@@ -130,27 +140,27 @@ case $partitioning in
 		case $boot in
 			uefi )
 				parted -s /dev/"$disk" mklabel gpt
-
+				
 				# make EFI partition
 				echo "${green}Making the ${bold}EFI partition...$end"
 				parted -s /dev/"$disk" mkpart P1 1MiB 512MiB
-
+				
 				# format EFI partition
 				echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
 				mkfs.fat -F32 /dev/"${disk}"1
 				efipartition="${disk}"1
 				
 				echo ""
-
+				
 				# make root partition
 				echo "${green}Making the ${bold}root partition...$end"
 				parted -s /dev/"$disk" mkpart P2 512MiB 100%
 				rootpartition="${disk}"2
 				;;
-				
+			
 			bios )
 				parted -s /dev/"$disk" mklabel msdos
-
+				
 				# make root partition
 				echo "${green}Making the ${bold}root partition...$end"
 				parted -s /dev/"$disk" mkpart primary 1MiB 100%
@@ -183,9 +193,10 @@ case $partitioning in
 		clear
 		break
 		;;
-
+	
 	S | s )
 		echo "Skipping..."
+		echo ""
 		selectdisk=y
 		break
 		;;
@@ -200,21 +211,39 @@ done # while loop
 
 case $selectdisk in
 	y )
+		disks=$(lsblk | grep "$disk")
+		echo "$disks"
 		echo ""
-		sleep 1
-		lsblk
 		
 		case $boot in
 			uefi )
-				echo ""
+				# ask for the EFI partition
+				while true; do
 				read -rp "What's the ${bold}EFI partition${end}? " efipartition
-				echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
-				mkfs.fat -F32 /dev/"$efipartition"
+				if [[ "$disks" == *"$efipartition"* ]]; then
+					echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
+					mkfs.fat -F32 /dev/"$efipartition"
+					break
+				else
+					echo "${red}Partition doesn't exist!$end"
+					echo ""
+				fi
+				done # while loop
+				
+				echo ""
 				;;
 		esac
 		
-		echo ""
+		# ask for the root partition
+		while true; do
 		read -rp "What's the ${bold}root partition${end}? " rootpartition
+		if [[ "$disks" == *"$rootpartition"* ]]; then
+			break
+		else
+			echo "${red}Partition doesn't exist!$end"
+			echo ""
+		fi
+		done # while loop
 		;;
 esac
 
@@ -239,7 +268,7 @@ case $fs in
 		fs=btrfs
 		break
 		;;
-		
+	
 	X | x )
 		echo "${green}Formatting the ${bold}root partition$end ${green}to xfs...$end"
 		mkfs.xfs -f -q /dev/"$rootpartition"
@@ -247,7 +276,7 @@ case $fs in
 		fs=xfs
 		break
 		;;	
-		
+	
 	* )
 		echo "${red}Invalid option!$end"
 		echo ""
@@ -319,7 +348,7 @@ echo ""
 # edit package list
 echo "Add/uncomment packages which you want in the package list"
 echo "${yellow}Linux, the firmware, polkit, nano, and neofetch are installed by default$end"
-echo "(also base and base-devel are installed but you can't remove those because the installer dies)"
+echo "(also base and base-devel but you can't remove those because the installer dies)"
 echo ""
 
 while true; do
@@ -413,10 +442,10 @@ echo ""
 
 while true; do
 read -rp "Select your ${yellow}region$end: " region
-echo ""
 
 if [[ -d /usr/share/zoneinfo/"$region" ]]; then
 	while true; do
+	echo ""
 	# same but for city
 	ls /usr/share/zoneinfo/"$region"
 	echo ""
@@ -427,7 +456,7 @@ if [[ -d /usr/share/zoneinfo/"$region" ]]; then
 		echo "Setting the ${bold}timezone$end..."
 		ln -sf /usr/share/zoneinfo/"$region"/"$city" /etc/localtime
 		break
-	else :
+	else
 		echo "${red}Invalid option!$end"
 		echo ""
 	fi
@@ -440,7 +469,7 @@ elif [[ -f /usr/share/zoneinfo/"$region" ]]; then
 	ln -sf /usr/share/zoneinfo/"$region" /etc/localtime
 	break
 
-else : 
+else 
 	echo "${red}Invalid option!$end"
 	echo ""
 fi
@@ -461,7 +490,7 @@ sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g' /etc/locale.gen
 locale-gen
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
-echo ""
+clear
 
 read -rp "${yellow}hostname$end [localhost] : " hostname
 echo "Setting the ${yellow}hostname$end..."
@@ -483,15 +512,15 @@ echo ""
 case $user in
 	Y | y | "" )
 		read -rp "What do you want to name your ${yellow}user$end? [user] " usernametmp
-
+		
 		# make it lowercase
 		username="${usernametmp,,}"
-
+		
 		# default to user username
 		case $username in
 				"" ) username="user" ;;
 		esac
-
+		
 		echo "Adding user ${yellow}$username$end"
 		useradd -m "$username"
 		echo "Setting the ${yellow}user$end password..."
@@ -518,23 +547,22 @@ case $user in
 				rm -rf paru-bin
 				break
 				;;
-				
+			
 			N | n | "" )
 				echo "Skipping..."
 				break
 				;;
-				
+			
 			* )
 				echo "${red}Invalid option!$end"
 				echo ""
 				;;
-				
 		esac
 		done # while loop
 		
 		break
 		;;
-		
+	
 	N | n )
 		echo "Skipping..."
 		break
@@ -544,7 +572,6 @@ case $user in
 		echo "${red}Invalid option!$end"
 		echo ""
 		;;
-	
 esac 
 done # while loop
 
@@ -558,12 +585,22 @@ echo ""; echo ""
 case $network in
 	D | d | "" )
 		# takes the long `ip a` output and shortens it down to just the interfaces
-		ip a | grep "<" | cut -d':' -f2 | cut -c 2-
-		echo ""
-		read -rp "Select your ${yellow}interface$end: " interface
-		
+		interfaces=$(ip a | grep "<" | cut -d':' -f2 | cut -c 2-)
+		echo "$interfaces"
 		echo ""
 
+		while true; do
+		read -rp "Select your ${yellow}interface$end: " interface
+		if [[ "$interfaces" == *"$interface"* ]]; then
+			break
+		else
+			echo "${red}Interface doesn't exist!$end"
+			echo ""
+		fi
+		done # while loop
+		
+		echo ""
+		
 		# the cat EOF thing doesn't work
 		echo "Writing configuration file and enabling services..."
 		echo "[Match]" > /etc/systemd/network/20-network.network
@@ -575,17 +612,17 @@ case $network in
 		
 		break
 		;;
-
+	
 	N | n )
 		echo "Installing NetworkManager..."
 		pacman -S networkmanager --noconfirm
 		echo ""
 		echo "Enabling service..."
 		systemctl enable NetworkManager
-
+		
 		break
 		;;
-		
+	
 	S | s )
 		echo "Skipping..."
 		break
@@ -600,53 +637,55 @@ done # while loop
 
 echo ""
 
-while true; do
 # swapfile
-read -n 1 -rsp "Use a ${blue}Swapfile$end? [n] " swap
-echo ""
+case $fs in
+	btrfs ) 
+		echo "${red}Swapfiles aren't supported on btrfs$end"
+		echo "(well I can't get them to work)"
+		echo ""
+		read -n 1 -rsp "Press any key to continue... "
+		break
+		;;
+	
+	* )
+		while true; do
 
-case $swap in
-	Y | y )
-		read -rp "Swapfile size (in MiB) [1024]: " swapsize
-
-		# if no input is given, default to 1024
-		case "$swapsize" in
-			"" ) swapsize=1024 ;;
-		esac
+		read -n 1 -rsp "Use a ${blue}Swapfile$end? [n] " swap
+		echo ""
 		
-		echo "Making Swap..."
-		case $fs in
-			btrfs )
-				echo "Swapfiles aren't supported on btrfs"
-				echo "(well I can't get them to work)"
-				break
-				;;
-			* )	
+		case $swap in
+			Y | y )
+				read -rp "Swapfile size (in MiB) [1024]: " swapsize
+				
+				# if no input is given, default to 1024
+				case "$swapsize" in
+					"" ) swapsize=1024 ;;
+				esac
+				
+				echo "Making Swap..."
 				dd if=/dev/zero of=/swapfile bs=1M count=$swapsize status=progress
 				chmod 600 /swapfile
 				mkswap /swapfile
 				swapon /swapfile
 				echo "/swapfile none swap defaults 0 0" >> /etc/fstab
 				break
-				;;		
+				;;	
+			
+			N | n | "" )
+				echo "Skipping..."
+				break
+				;;
+			
+			* )
+				echo "${red}Invalid option!$end"
+				echo ""
+				;;	
 		esac
+		done # while loop
 		
 		echo ""
-		break
-		;;
-		
-	N | n | "" )
-		echo "Skipping..."
-		break
-		;;
-	
-	* )
-		echo "${red}Invalid option!$end"
-		echo ""
-		;;
-				
+		;;			
 esac
-done # while loop
 
 # enable services
 case $de in
@@ -659,21 +698,22 @@ esac
 
 clear
 
-echo "Installing the CPU microcode..."
+echo "${green}Installing the CPU microcode...$end"
 echo ""
 case $removable in
 	y )
-		# kinda hacky but it works
+		# install both because removable
 		pacman -S amd-ucode intel-ucode --noconfirm
 		;;
 	n )
 		while true; do
 		# read CPU vendor (for microcode)
-		read -rp "${blue}Intel$end or ${red}AMD$end CPU? (lowercase pls) " cpu
+		read -n 1 -rp "${blue}Intel$end or ${red}AMD$end CPU? (lowercase pls) " cpu
+		echo ""
 		
 		case $cpu in
-			a | A | amd | AMD ) pacman -S amd-ucode --noconfirm; break ;;
-			i | I | intel | Intel ) pacman -S intel-ucode --noconfirm; break ;;
+			a | A ) pacman -S amd-ucode --noconfirm; break ;;
+			i | I ) pacman -S intel-ucode --noconfirm; break ;;
 			* )	
 				echo "${red}Invalid option!$end"
 				echo ""
@@ -684,8 +724,9 @@ case $removable in
 		;;
 esac
 
-# bootloader
 echo ""
+
+# bootloader
 echo "${green}Installing GRUB...$end"
 echo ""
 
@@ -710,9 +751,11 @@ case $boot in
 		;;
 esac
 
-# make le grub config
 echo ""
-echo "Writing GRUB configuration file..."
+
+# make le grub config
+echo "${green}Writing GRUB configuration file...$end"
+echo ""
 grub-mkconfig -o /boot/grub/grub.cfg
 
 exit
