@@ -28,16 +28,12 @@ echo "${bold}${green}Archstall Arch Linux installer $end"
 while getopts "hr" arg; do
 	case $arg in
 		h | help )
-			echo "This script is made by PowerMan2206"
+			echo "${bold}This script is made by PowerMan2206"
 			echo "https://github.com/PowerMan2206/archstall"
 			echo ""
-			echo "Usage:"
-			echo "${bold}  --help | -h$end"
-			echo "    show this help menu and exit"
-			echo "${bold}  --removable | -r$end"
-			echo "    install on a removable device"
-			echo "${bold}${italic}  just running the script$end"
-			echo "    run Archstall"
+			echo "Usage:$end"
+			echo "--help       -h     show this help menu and exit"
+			echo "--removable  -r     install on a removable device"
 			echo ""
 			echo "${italic}more coming soon maybe$end"
 			echo ""
@@ -326,7 +322,7 @@ nano
 #plasma
 #lxqt
 #mate
-#xfce4 
+#xfce4
 #xfce4-goodies
 
 # browsers
@@ -583,7 +579,7 @@ echo ""; echo ""
 case $network in
 	D | d | "" )
 		# takes the long `ip a` output and shortens it down to just the interfaces
-		interfaces=$(ip a | grep "<" | cut -d':' -f2 | cut -c 2-)
+		interfaces=$(ip a | grep "<" | cut -d':' -f2 | cut -c 2- | grep -v lo)
 		echo "$interfaces"
 		echo ""
 
