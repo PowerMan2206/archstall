@@ -22,10 +22,12 @@ device=regular
 dm=n
 de=n
 
+clear
+echo "${bold}${green}Archstall Arch Linux installer $end"
+
 while getopts "hr" arg; do
 	case $arg in
 		h | help )
-			echo "${bold}${green}Archstall Arch Linux installer $end"
 			echo "This script is made by PowerMan2206"
 			echo "https://github.com/PowerMan2206/archstall"
 			echo ""
@@ -47,9 +49,6 @@ while getopts "hr" arg; do
 	esac
 done
 
-clear
-
-echo "${bold}${green}Archstall Arch Linux installer $end"
 echo "${red}This script comes with no warranty, screwing up your system is your fault
 You can cancel the script at any time by holding down Ctrl+C $end"
 echo "Installation for a $device device"
@@ -92,7 +91,7 @@ lsblk
 echo ""
 
 while true; do
-read -rp "Select the disk you want to use ${red}(not a partition) $end" disk
+read -rp "Select the disk you want to use ${red}(not a partition)$end /dev/" disk
 if [[ "$(lsblk)" == *"$disk"* ]]; then
 	break
 else
@@ -134,7 +133,6 @@ case $partitioning in
 		sleep 1
 		echo "Erasing disk in 1..."
 		sleep 1
-		
 		echo "$end"
 		
 		case $boot in
@@ -175,7 +173,7 @@ case $partitioning in
 	# manual partitioning
 	M | m )
 		while true; do
-		read -n 1 -rsp "Do you want to use (f)disk, (c)fdisk or (p)arted? [fdisk] " partitioner
+		read -n 1 -rp "Do you want to use (f)disk, (c)fdisk or (p)arted? [fdisk] " partitioner
 		echo ""
 		
 		case $partitioner in
@@ -219,7 +217,7 @@ case $selectdisk in
 			uefi )
 				# ask for the EFI partition
 				while true; do
-				read -rp "What's the ${bold}EFI partition${end}? " efipartition
+				read -rp "What's the ${bold}EFI partition${end}? /dev/" efipartition
 				if [[ "$disks" == *"$efipartition"* ]]; then
 					echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
 					mkfs.fat -F32 /dev/"$efipartition"
@@ -236,7 +234,7 @@ case $selectdisk in
 		
 		# ask for the root partition
 		while true; do
-		read -rp "What's the ${bold}root partition${end}? " rootpartition
+		read -rp "What's the ${bold}root partition${end}? /dev/" rootpartition
 		if [[ "$disks" == *"$rootpartition"* ]]; then
 			break
 		else
@@ -250,7 +248,7 @@ esac
 echo ""	
 
 while true; do
-read -n 1 -rsp "Select the ${bold}root filesystem$end: ext(4), (x)fs, (b)trfs [ext4] " fs
+read -n 1 -rp "Select the ${bold}root filesystem$end: ext(4), (x)fs, (b)trfs [ext4] " fs
 echo ""
 
 case $fs in
@@ -352,7 +350,7 @@ echo "(also base and base-devel but you can't remove those because the installer
 echo ""
 
 while true; do
-read -n 1 -rsp "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
+read -n 1 -rp "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
 echo ""
 
 case $editor in
@@ -507,7 +505,7 @@ passwd
 echo ""
 
 while true; do
-read -n 1 -rsp "Add a ${yellow}user$end? [y] " user
+read -n 1 -rp "Add a ${yellow}user$end? [y] " user
 echo ""
 case $user in
 	Y | y | "" )
@@ -534,7 +532,7 @@ case $user in
 		
 		while true; do
 		# AUR helper
-		read -n 1 -rsp "Install ${yellow}paru$end? [n] " aur
+		read -n 1 -rp "Install ${yellow}paru$end? [n] " aur
 		echo ""
 		case $aur in
 			Y | y )
@@ -579,7 +577,7 @@ clear
 
 while true; do
 # network setup
-read -n 1 -rsp "Configure ${yellow}systemd-network(d)$end, ${yellow}(N)etworkManager$end, or (s)kip? [systemd-networkd] " network
+read -n 1 -rp "Configure ${yellow}systemd-network(d)$end, ${yellow}(N)etworkManager$end, or (s)kip? [systemd-networkd] " network
 echo ""; echo ""
 
 case $network in
@@ -650,7 +648,7 @@ case $fs in
 	* )
 		while true; do
 
-		read -n 1 -rsp "Use a ${blue}Swapfile$end? [n] " swap
+		read -n 1 -rp "Use a ${blue}Swapfile$end? [n] " swap
 		echo ""
 		
 		case $swap in
