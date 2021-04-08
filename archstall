@@ -314,11 +314,15 @@ case $rootpartition in
 	* )
 		case $efipartition in
 			n ) 
-				disks=$(lsblk | grep "$disk")
+				disks=$(lsblk | grep "$disk" | grep -v "$rootpartition")
 				echo "$disks"
 				echo ""
 				selectefipartition 
 				;;
+		esac
+
+		case $fs in
+			n ) selectfs ;;
 		esac
 		;;
 esac
