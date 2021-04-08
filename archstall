@@ -42,6 +42,7 @@ while getopts "hp:e:f:m:u:r" arg; do
 			echo "--mountpoint      -m [location]   root partition mountpoint [/mnt]"
 			echo "--username        -u [username]   change default user username [n]"
 			echo "--removable       -r              install on a removable device [n]"
+			echo "running the script                runs the script in an \"interactive\" mode"
 			echo ""
 			echo "${italic}more coming soon maybe$end"
 			echo ""
