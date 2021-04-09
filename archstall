@@ -16,16 +16,11 @@ end=$(tput sgr0)
 # exit if a command fails
 set -e
 
-# some default vars
-removable=n
-device=regular
-dm=n
-de=n
 mountpoint=/mnt
+de=n
+dm=n
 username=n
-rootpartition=n
-efipartition=n
-fs=n
+removable=n
 
 while getopts "hp:e:f:m:u:r" arg; do
 	case $arg in
@@ -38,7 +33,7 @@ while getopts "hp:e:f:m:u:r" arg; do
 			echo "--help            -h              show this help menu and exit"
 			echo "--root-partition  -p [partition]  partition on which to install Arch"
 			echo "--efi-partition   -e [partition]  EFI partition ${bold}(UEFI systems only)$end"
-			echo "--filesystem      -f [filesystem] Filesystem to use on the root partition ([ext4], btrfs, xfs)"
+			echo "--filesystem      -f [filesystem] Filesystem to use on the root partition (ext4, btrfs, xfs)"
 			echo "--mountpoint      -m [location]   root partition mountpoint [/mnt]"
 			echo "--username        -u [username]   change default user username [n]"
 			echo "--removable       -r              install on a removable device [n]"
@@ -51,30 +46,32 @@ while getopts "hp:e:f:m:u:r" arg; do
 			;;
 		
 		p | root-partition ) 
-			if [[ "$(lsblk)" == *"$OPTARG"* ]]; then
-				rootpartition=$OPTARG
-			else
-				echo "${red}Root partition doesn't exist!$end"
-				echo ""
-				exit 1
-			fi
-			
+			case "$(lsblk)" in
+				*"$OPTARG"* ) rootpartition=$OPTARG ;;
+				* ) 
+					echo "${red}Root partition doesn't exist!$end"
+					echo ""
+					exit 1
+					;;
+			esac
+
 			disk="$(lsblk -no pkname /dev/$rootpartition)"
 			;;
 		
 		e | efi-partition )
-			if [[ "$(lsblk)" == *"$OPTARG"* ]]; then
-				efipartition=$OPTARG
-			else
-				echo "${red}EFI partition doesn't exist!$end"
-				echo ""
-				exit 1
-			fi
+			case "$(lsblk)" in
+				*"$OPTARG"* ) efipartition=$OPTARG ;;
+				* ) 
+					echo "${red}EFI partition doesn't exist!$end"
+					echo ""
+					exit 1
+					;;
+			esac
 			;;
 			
 		f | filesystem )
 			case $OPTARG in
-				ext4 | btrfs | xfs ) fs=$OPTARG ;;
+				ext4 | btrfs | xfs ) filesystem=$OPTARG ;;
 				* ) 
 					echo "${red}Invalid filesystem!$end"
 					echo ""
@@ -85,57 +82,46 @@ while getopts "hp:e:f:m:u:r" arg; do
 			
 		m | mountpoint ) mountpoint=$OPTARG ;;
 		u | user ) username=${OPTARG,,} ;;
-		r | removable ) removable=y; device=removable ;;
+		r | removable ) removable=y ;;
 	esac
 done
 
-# some functions
-selectfs() {
-	case $fs in
-		n )
-			while true; do
-			read -n 1 -rp "Select the ${bold}root filesystem$end: ext(4), (x)fs, (b)trfs [ext4] " fs
-		
-			case $fs in
-			E | e | 4 | "" | B | b | X | x ) break ;;
-			* )
-				echo "${red}Invalid option!$end"
-				echo ""
-				;; 
-			esac
-			done # while loop
-			;;
-	esac
+clear 
+
+# functions
+invalidoption() {
+	echo "${red}Invalid option!$end"
+	echo ""
 }
 
 selectefipartition() {
-	case $boot in
-		uefi )
-			# ask for the EFI partition
-			while true; do
-			read -rp "What's the ${bold}EFI partition${end}? /dev/" efipartition
-			if [[ "$disks" == *"$efipartition"* ]]; then
-				echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
-				mkfs.fat -F32 /dev/"$efipartition"
-				break
-			else
-				echo "${red}Partition doesn't exist!$end"
-				echo ""
-			fi
-			done # while loop
-			
+	if [ -z $uefi ] && [ -z $efipartition ]; then
+		disks=$(lsblk | grep "$disk" | grep -v "$rootpartition")
+		echo "$disks"
+		echo ""
+		
+		while true; do
+		read -rp "What's the ${bold}EFI partition${end}? /dev/" efipartition
+		if [[ "$disks" == *"$efipartition"* ]]; then
+			echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
+			mkfs.fat -F32 /dev/$efipartition
+			break
+		else
+			echo "${red}Partition doesn't exist!$end"
 			echo ""
-			;;
-	esac
+		fi
+		done # while loop
+		
+		echo ""
+	fi
 }
 
 selectpartitions() {
+	# ask for the root partition
 	disks=$(lsblk | grep "$disk")
 	echo "$disks"
 	echo ""
-	selectefipartition
 	
-	# ask for the root partition
 	while true; do
 	read -rp "What's the ${bold}root partition${end}? /dev/" rootpartition
 	if [[ "$disks" == *"$rootpartition"* ]]; then
@@ -145,25 +131,44 @@ selectpartitions() {
 		echo ""
 	fi
 	done # while loop
+
+	disk="$(lsblk -no pkname /dev/$rootpartition)"
+	echo ""
+
+	# also EFI partition if in UEFI
+	selectefipartition
 }
 
-clear
+selectfs() {
+	if [ -z $filesystem ]; then
+		while true; do
+		read -n 1 -rp "Select the ${bold}root filesystem$end: ext(4), (x)fs, (b)trfs [ext4] " filesystem
+		echo ""
+	
+		case $filesystem in
+			E | e | 4 | "" | B | b | X | x ) echo ""; break ;;
+			* ) invalidoption ;;
+		esac
+		done # while loop
+	fi
+}
 
 echo "${bold}${green}Archstall Arch Linux installer $end"
 echo "${red}This script comes with no warranty, screwing up your system is your fault
 You can cancel the script at any time by holding down Ctrl+C $end"
-echo "Installation for a $device device"
+case $removable in
+	y ) echo "Installation for a removable device" ;;
+esac
 echo ""
 read -n 1 -rsp "Press any key to continue... "
 echo ""; echo ""
 
 # check the boot mode
 if [[ -d /sys/firmware/efi/efivars ]]; then
-	boot="uefi"
 	echo "System booted in ${bold}UEFI$end mode"
 else
 	# notify user is booted in BIOS
-	boot="bios"
+	uefi=n
 	echo "System booted in ${bold}BIOS$end mode"
 	echo "The installer will install Arch Linux in a way so that it's bootable in ${bold}BIOS$end mode."
 	echo "Reboot into ${bold}UEFI$end mode if you want to install for that."
@@ -171,6 +176,10 @@ else
 	read -n 1 -rsp "Press any key to continue or Ctrl+C to cancel..."
 	echo ""
 fi
+
+# NOTE:
+# yes I know I'm using `if [ -z $uefi ]` wrong
+# but it's easier this way
 
 echo ""
 
@@ -186,14 +195,12 @@ if [[ $(findmnt $mountpoint) ]]; then
 	umount -R $mountpoint
 	echo ""
 fi
-		
-case $rootpartition in
-	n )	
-		# get the disk to partition
-		lsblk
-		echo ""
-		
-		while true; do
+
+if [ -z $rootpartition ]; then
+	lsblk 
+	echo ""
+	
+	while true; do
 		read -rp "Select the disk you want to use ${red}(not a partition)$end /dev/" disk
 		if [[ "$(lsblk)" == *"$disk"* ]]; then
 			break
@@ -201,22 +208,21 @@ case $rootpartition in
 			echo "${red}Disk doesn't exist!$end"
 			echo ""
 		fi
-		done # while loop
-		
-		echo ""
-		
-		while true; do
-		# automatic or manual disk partitioning?
+	done # while loop
+	echo ""
+	
+	# ask what kind of partitioning should be used
+	while true; do
 		read -n 1 -rp "(a)utomatic, (m)anual, or (s)kip disk partitioning? [automatic] " partitioning 
 		echo ""
-		
+
 		case $partitioning in
-			# automatic partitioning
 			A | a | "" )
-				case $boot in
-					uefi ) echo "The disk will be partitioned into a 512M ${bold}EFI partition$end (${disk}1) and the ${bold}root partition$end (${disk}2) taking up the rest" ;;
-					bios ) echo "The disk will be partitioned into a single ${bold}root partition$end taking up the entire disk (${disk}1)" ;;
-				esac
+				if [ -z $uefi ]; then
+					echo "The disk will be partitioned into a 512M ${bold}EFI partition$end (${disk}1) and the ${bold}root partition$end (${disk}2) taking up the rest"
+				else
+					echo "The disk will be partitioned into a single ${bold}root partition$end taking up the entire disk (${disk}1)"
+				fi
 				
 				echo ""
 				
@@ -224,55 +230,51 @@ case $rootpartition in
 				read -rp "Are you sure you want to continue? You can cancel with Ctrl+C "
 				
 				echo "$red"
-				
-				# for loops are for nerds
-				echo "Erasing disk in 5..."
-				sleep 1
-				echo "Erasing disk in 4..."
-				sleep 1
-				echo "Erasing disk in 3..."
-				sleep 1
-				echo "Erasing disk in 2..."
-				sleep 1
-				echo "Erasing disk in 1..."
-				sleep 1
+				# for loops aren't for nerds
+				for delet in {5..1}; do
+					echo -n "Erasing disk in $delet"
+					sleep 0.5
+					echo -n "."
+					sleep 0.5
+					echo -n "."
+					sleep 0.5
+					echo "."
+				done
 				echo "$end"
 				
-				case $boot in
-					uefi )
-						parted -s /dev/"$disk" mklabel gpt
-						
-						# make EFI partition
-						echo "${green}Making the ${bold}EFI partition...$end"
-						parted -s /dev/"$disk" mkpart P1 1MiB 512MiB
-						
-						# format EFI partition
-						echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
-						mkfs.fat -F32 /dev/"${disk}"1
-						efipartition="${disk}"1
-						
-						echo ""
-						
-						# make root partition
-						echo "${green}Making the ${bold}root partition...$end"
-						parted -s /dev/"$disk" mkpart P2 512MiB 100%
-						rootpartition="${disk}"2
-						;;
+				if [ -z $uefi ]; then
+					parted -s /dev/$disk mklabel gpt
 					
-					bios )
-						parted -s /dev/"$disk" mklabel msdos
-						
-						# make root partition
-						echo "${green}Making the ${bold}root partition...$end"
-						parted -s /dev/"$disk" mkpart primary 1MiB 100%
-						parted -s /dev/"$disk" set 1 boot on
-						rootpartition="${disk}"1
-						;;
-				esac
-				
+					# make EFI partition
+					echo "${green}Making the ${bold}EFI partition...$end"
+					parted -s /dev/$disk mkpart P1 1MiB 512MiB
+					efipartition="$(lsblk -r -o NAME | grep $disk | sort | sed 1d | sed -n 1p)"
+					
+					# format EFI partition
+					echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
+					mkfs.fat -F32 /dev/$efipartition
+					
+					
+					echo ""
+					
+					# make root partition
+					echo "${green}Making the ${bold}root partition...$end"
+					parted -s /dev/$disk mkpart P2 512MiB 100%
+					rootpartition="$(lsblk -r -o NAME | grep $disk | sort | sed 1d | sed -n 2p)"
+
+				else					
+					parted -s /dev/"$disk" mklabel msdos
+					
+					# make root partition
+					echo "${green}Making the ${bold}root partition...$end"
+					parted -s /dev/$disk mkpart primary 1MiB 100%
+					parted -s /dev/$disk set 1 boot on
+					rootpartition="$(lsblk -r -o NAME | grep $disk | sort | sed 1d | sed -n 1p)"
+				fi
+					
 				break
 				;;
-			
+
 			# manual partitioning
 			M | m )
 				while true; do
@@ -283,10 +285,7 @@ case $rootpartition in
 					f | fdisk | "" ) fdisk /dev/"$disk"; break ;;
 					c | cfdisk ) cfdisk /dev/"$disk"; break ;;
 					p | parted ) parted /dev/"$disk"; break ;;
-					* )
-						echo "${red}Invalid option!$end"
-						echo ""
-						;;	
+					* ) invalidoption ;;	
 				esac
 				done # while loop
 				
@@ -303,52 +302,35 @@ case $rootpartition in
 				selectfs
 				break
 				;;
-			
-			* )
-				echo "${red}Invalid option!$end"
-				echo ""
-				;;
+				
+			* ) invalidoption ;;
 		esac
-		done # while loop
-		;;
+	done # while loop
 
-	* )
-		case $efipartition in
-			n ) 
-				disks=$(lsblk | grep "$disk" | grep -v "$rootpartition")
-				echo "$disks"
-				echo ""
-				selectefipartition 
-				;;
-		esac
+else
+	selectefipartition
+	selectfs
+fi
 
-		case $fs in
-			n ) selectfs ;;
-		esac
-		;;
-esac
-
-echo ""	
-
-case $fs in
+case $filesystem in
 	ext4 | E | e | 4 | "" )
 		echo "${green}Formatting the ${bold}root partition$end ${green}to ext4...$end"
 		mkfs.ext4 -q /dev/$rootpartition
-		fs=ext4
+		filesystem=ext4
 		;;
 	
 	btrfs | B | b )
 		echo "${green}Formatting the ${bold}root partition$end ${green}to btrfs...$end"
 		mkfs.btrfs -f /dev/$rootpartition
-		#btrfs subvolume create /
-		fs=btrfs
+		#btrfs subvolume create / #idk
+		filesystem=btrfs
 		;;
 	
 	xfs | X | x )
 		echo "${green}Formatting the ${bold}root partition$end ${green}to xfs...$end"
 		mkfs.xfs -f -q /dev/$rootpartition
 		echo "xfsprogs" >> packages
-		fs=xfs
+		filesystem=xfs
 		;;	
 esac
 
@@ -357,12 +339,10 @@ echo ""
 # mount the partition/s
 echo "Mounting the partitions..."
 mount /dev/"$rootpartition" $mountpoint
-case $boot in
-	uefi )
-		mkdir $mountpoint/efi
-		mount /dev/"$efipartition" $mountpoint/efi
-		;;
-esac
+if [ -z $uefi ]; then
+	mkdir $mountpoint/efi
+	mount /dev/"$efipartition" $mountpoint/efi
+fi
 
 clear
 
@@ -409,7 +389,7 @@ EOF
 
 echo ""
 
-# many mistakes happen here, you are allowed to make mistakes
+# you are allowed to make mistakes
 set +e
 
 while true; do
@@ -427,10 +407,7 @@ while true; do
 		N | n | "" ) nano packages; break ;;
 		V | v ) vim packages; break ;;
 		S | s ) echo "Skipping package list editing..."; break ;;
-		* )
-			echo "${red}Invalid option!$end"
-			echo ""
-			;;
+		* ) invalidoption ;;
 	esac
 	done # while loop
 	
@@ -490,7 +467,11 @@ clear
 
 # declare stuff
 echo "Declaring variables..."
-declare -p boot disk dm de fs removable username > $mountpoint/varstuff
+if [ -z $uefi ]; then
+	declare -p disk dm de filesystem removable username > $mountpoint/varstuff
+else
+	declare -p uefi disk dm de filesystem removable username > $mountpoint/varstuff
+fi
 
 echo ""
 
@@ -516,7 +497,13 @@ end=$(tput sgr0)
 set -e
 
 # source the variables
-source /varstuff
+. /varstuff
+
+# functions
+invalidoption() {
+	echo "${red}Invalid option!$end"
+	echo ""
+}
 
 userstuff() {
 	echo "Adding user ${yellow}$username$end"
@@ -551,10 +538,7 @@ userstuff() {
 			break
 			;;
 		
-		* )
-			echo "${red}Invalid option!$end"
-			echo ""
-			;;
+		* ) invalidoption ;;
 	esac
 	done # while loop
 }
@@ -580,8 +564,7 @@ if [[ -d /usr/share/zoneinfo/"$region" ]]; then
 		ln -sf /usr/share/zoneinfo/"$region"/"$city" /etc/localtime
 		break
 	else
-		echo "${red}Invalid option!$end"
-		echo ""
+		invalidoption
 	fi
 	
 	done # while loop
@@ -593,8 +576,7 @@ elif [[ -f /usr/share/zoneinfo/"$region" ]]; then
 	break
 
 else 
-	echo "${red}Invalid option!$end"
-	echo ""
+	invalidoption
 fi
 
 done # while loop
@@ -631,7 +613,7 @@ echo ""
 
 case $username in
 	n ) 
-		read -rp "What do you want to name your ${yellow}user$end? ${yellow}(leave empty for no user)$end " usernametmp
+		read -rp "What do you want to name your ${yellow}user$end? (empty for no user) " usernametmp
 		username="${usernametmp,,}"
 		case $username in
 				"" ) echo "Skipping..." ;;
@@ -669,12 +651,13 @@ case $network in
 		echo ""
 		
 		# the cat EOF thing doesn't work
-		echo "Writing configuration file and enabling services..."
+		echo "${green}Writing configuration file and enabling services...$end"
 		echo "[Match]" > /etc/systemd/network/20-network.network
 		echo "Name=$interface" >> /etc/systemd/network/20-network.network
 		echo "[Network]" >> /etc/systemd/network/20-network.network
 		echo "DHCP=yes" >> /etc/systemd/network/20-network.network
-		
+
+		echo "${green}Enabling services...$end"
 		systemctl enable systemd-networkd systemd-resolved
 		
 		break
@@ -684,7 +667,7 @@ case $network in
 		echo "Installing NetworkManager..."
 		pacman -S networkmanager --noconfirm
 		echo ""
-		echo "Enabling service..."
+		echo "${green}Enabling service...$end"
 		systemctl enable NetworkManager
 		
 		break
@@ -695,17 +678,14 @@ case $network in
 		break
 		;;
 	
-	* )
-		echo "${red}Invalid option!$end"
-		echo ""
-		;;
+	* ) invalidoption ;;
 esac
 done # while loop
 
 echo ""
 
 # swapfile
-case $fs in
+case $filesystem in
 	btrfs ) 
 		echo "${red}Swapfiles aren't supported on btrfs$end"
 		echo "(well I can't get them to work)"
@@ -742,10 +722,7 @@ case $fs in
 				break
 				;;
 			
-			* )
-				echo "${red}Invalid option!$end"
-				echo ""
-				;;	
+			* ) invalidoption ;;
 		esac
 		done # while loop
 		
@@ -780,10 +757,7 @@ case $removable in
 		case $cpu in
 			a | A ) pacman -S amd-ucode --noconfirm; break ;;
 			i | I ) pacman -S intel-ucode --noconfirm; break ;;
-			* )	
-				echo "${red}Invalid option!$end"
-				echo ""
-				;;
+			* )	invalidoption ;;
 		esac
 		
 		done # while loop
@@ -796,26 +770,23 @@ echo ""
 echo "${green}Installing GRUB...$end"
 echo ""
 
+pacman -S grub --noconfirm
+echo ""
+
 # different installation methods based on the boot mode
-case $boot in
-	uefi )
-		pacman -S grub efibootmgr --noconfirm
-		echo ""
-		case $removable in
-			y ) grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB --removable --recheck ;;
-			n ) grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB ;;
-		esac
-		;;
-	
-	bios )
-		pacman -S grub --noconfirm
-		echo ""
-		case $removable in
-			y ) grub-install /dev/"$disk" --recheck ;;
-			n ) grub-install /dev/"$disk" ;;
-		esac
-		;;
-esac
+if [ -z $uefi ]; then
+	pacman -S efibootmgr --noconfirm
+	echo ""
+	case $removable in
+		y ) grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB --removable --recheck ;;
+		n ) grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB ;;
+	esac
+else
+	case $removable in
+		y ) grub-install /dev/$disk --recheck ;;
+		n ) grub-install /dev/$disk ;;
+	esac
+fi
 
 echo ""
 
@@ -845,6 +816,9 @@ echo "Cleaning up files..."
 rm $mountpoint/archstall2 $mountpoint/varstuff
 
 echo ""
+
+# sometimes it fails here so eh
+set +e
 
 # unmount the filesystems
 echo "Unmounting the filesystems..."

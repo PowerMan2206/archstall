@@ -9,7 +9,7 @@ Simple Arch Linux installer.
 To use the script, run 
 
 ```bash
-curl -L https://git.io/JtoeR > archstall
+curl -L https://git.io/JtoeR -o archstall
 bash archstall [-h]
 ```
 
