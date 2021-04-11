@@ -151,22 +151,6 @@ selectfs() {
 		esac
 		done # while loop
 	fi
-
-	echo ""
-
-	echo "${green}Formatting the ${bold}root partition$end ${green}to $filesystem...$end"
-	case "$filesystem" in
-		ext4 ) mkfs.ext4 -F /dev/"$rootpartition" ;;
-		btrfs )
-			mkfs.btrfs -f /dev/"$rootpartition"
-			echo "btrfs-progs" >> packages
-			;;
-		
-		xfs )
-			mkfs.xfs -f /dev/"$rootpartition"
-			echo "xfsprogs" >> packages
-			;;	
-	esac
 }
 
 echo "${bold}${green}Archstall Arch Linux installer $end"
@@ -288,7 +272,8 @@ if [ -z "$rootpartition" ]; then
 					parted -s /dev/"$disk" set 1 boot on
 					rootpartition="$(lsblk -r -o NAME | grep $disk | sort | sed 1d | sed -n 1p)"
 				fi
-					
+
+				selectfs	
 				break
 				;;
 			
@@ -328,6 +313,22 @@ else
 	selectefipartition
 	selectfs
 fi
+
+echo ""
+
+echo "${green}Formatting the ${bold}root partition$end ${green}to $filesystem...$end"
+case "$filesystem" in
+	ext4 ) mkfs.ext4 -F /dev/"$rootpartition" ;;
+	btrfs )
+		mkfs.btrfs -f /dev/"$rootpartition"
+		echo "btrfs-progs" >> packages
+		;;
+	
+	xfs )
+		mkfs.xfs -f /dev/"$rootpartition"
+		echo "xfsprogs" >> packages
+		;;	
+esac
 
 echo ""
 
