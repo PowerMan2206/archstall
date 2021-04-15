@@ -15,7 +15,7 @@ set -e
 
 mountpoint=/mnt
 
-while getopts "hp:e:f:m:s:u:n:r" arg; do
+while getopts "hp:e:lf:m:s:u:n:r" arg; do
 	case "$arg" in
 		h | help )
 			echo "${bold}${green}Archstall Arch Linux installer $end"
@@ -26,6 +26,7 @@ while getopts "hp:e:f:m:s:u:n:r" arg; do
 			echo "--root-partition  -p [partition]  partition on which to install Arch"
 			echo "--efi-partition   -e [partition]  EFI partition ${bold}(UEFI systems only)$end"
 			echo "${bold}  heads up: the selected root/EFI partition will be wiped!$end"
+			echo "--luks            -l              use LUKS1 encryption on the root partition"
 			echo "--filesystem      -f [filesystem] Filesystem to use on the root partition ([ext4], btrfs, xfs)"
 			echo "--mountpoint      -m [location]   root partition mountpoint [/mnt]"
 			echo "${yellow}--swapfile        -s [number]$end     swapfile size (in MiB) [n]"
@@ -49,8 +50,6 @@ while getopts "hp:e:f:m:s:u:n:r" arg; do
 				echo ""
 				exit 1
 			fi
-			
-			disk="$(lsblk -no pkname /dev/$rootpartition)"
 			;;
 		
 		e | efi-partition )
@@ -62,7 +61,8 @@ while getopts "hp:e:f:m:s:u:n:r" arg; do
 				exit 1
 			fi
 			;;
-		
+
+		l | luks ) luks=y ;;
 		f | filesystem )
 			case "$OPTARG" in
 				ext4 | btrfs | xfs ) filesystem="$OPTARG" ;;
@@ -83,10 +83,16 @@ while getopts "hp:e:f:m:s:u:n:r" arg; do
 				exit 1
 			fi
 			;;
+		
 		s | swapfile ) swapsize="$OPTARG" ;;
 		u | username ) username="${OPTARG,,}" ;;
 		n | hostname ) hostname="$OPTARG" ;;
 		r | removable ) removable=y ;;
+		? )
+			echo "${red}Invalid flag!$end"
+			echo ""
+			exit 1
+			;;
 	esac
 done
 
@@ -97,7 +103,7 @@ invalidoption() {
 }
 
 selectfs() {
-	if [ -z "$filesystem" ]; then
+	if [[ -z "$filesystem" ]]; then
 		while true; do
 		read -n 1 -rp "Select the ${bold}root filesystem$end: ext(4), (x)fs, (b)trfs [ext4] " filesystem
 		echo ""
@@ -115,11 +121,12 @@ selectfs() {
 selectpartitions() {
 	# ask for the root partition
 	rootdisks="$(lsblk | grep $disk)"
+	echo "$rootdisks"
 	echo ""
 	
 	while true; do
 	read -rp "What's the ${bold}root partition${end}? /dev/" rootpartition
-	if [[ "$disks" != *"$rootpartition"* ]] || [[ "$rootpartition" == "" ]]; then
+	if [[ "$rootdisks" != *"$rootpartition"* ]] || [[ "$rootpartition" == "" ]]; then
 			echo "${red}Partition doesn't exist!$end"
 			echo ""
 	elif [[ "$rootdisks" == *"$rootpartition"* ]]; then
@@ -134,7 +141,7 @@ selectpartitions() {
 }
 
 selectefipartition() {
-	if [ -z "$uefi" ] && [ -z "$efipartition" ]; then
+	if [[ -n "$uefi" ]] && [[ -z "$efipartition" ]]; then
 		efidisks="$(lsblk | grep -v $rootpartition)"
 		echo "$efidisks"
 		echo ""
@@ -150,7 +157,7 @@ selectefipartition() {
 		fi
 		done # while loop
 		echo ""
-	elif [ -z "$uefi" ]; then
+	elif [[ -n "$uefi" ]]; then
 		formatefipartition
 		echo ""
 	fi
@@ -168,8 +175,7 @@ echo "${bold}${green}Archstall Arch Linux installer $end"
 echo "${red}This script comes with no warranty, screwing up your system is your fault
 You can cancel the script at any time by holding down Ctrl+C $end"
 
-if [[ -z "$removable" ]]; then :
-else
+if [[ -n "$removable" ]]; then
 	echo "Installation for a removable device"
 fi
 
@@ -182,19 +188,14 @@ echo ""; echo ""
 # ((yes it already gets nuked at the end but shush))
 if [[ -f packages ]]; then rm packages; fi
 
-# NOTE:
-# yes I know I'm using `if [ -z $uefi ]` wrong
-# but it's easier this way
-
 # check the boot mode
 if [[ -d /sys/firmware/efi/efivars ]]; then
 	echo "System booted in ${bold}UEFI$end mode"
+	uefi=y
 else
 	# notify user is booted in BIOS
 	echo "System booted in ${bold}BIOS$end mode"
 	echo "Reboot into ${bold}UEFI$end mode if you want to install for that."
-	# doesn't matter what the var is as long as it's declared
-	uefi=n
 fi
 
 echo ""
@@ -233,7 +234,7 @@ if [[ -z "$rootpartition" ]]; then
 		
 		case "$partitioning" in
 			A | a | "" )
-				if [ -z "$uefi" ]; then
+				if [[ -n "$uefi" ]]; then
 					echo "The disk will be partitioned into a 512M ${bold}EFI partition$end and the ${bold}root partition$end taking up the rest"
 				else
 					echo "The disk will be partitioned into a single ${bold}root partition$end taking up the entire disk"
@@ -261,7 +262,7 @@ if [[ -z "$rootpartition" ]]; then
 
 				echo ""
 
-				if [ -z "$uefi" ]; then
+				if [[ -n "$uefi" ]]; then
 					parted -s /dev/"$disk" mklabel gpt
 					
 					# make EFI partition
@@ -281,7 +282,7 @@ if [[ -z "$rootpartition" ]]; then
 				
 				else					
 					parted -s /dev/"$disk" mklabel msdos
-
+					
 					# make root partition
 					echo "${green}Making the ${bold}root partition...$end"
 					parted -s /dev/"$disk" mkpart primary 1MiB 100%
@@ -335,6 +336,22 @@ fi
 
 echo ""
 
+# some luks stuff
+if [[ -n "$luks" ]]; then
+	echo "${green}Encrypting /dev/$rootpartition...$end"
+	cryptsetup -y --type luks1 luksFormat /dev/"$rootpartition"
+	echo ""
+	echo "${green}Opening encrypted /dev/$rootpartition...$end"
+	cryptsetup open /dev/"$rootpartition" cryptroot
+
+	# set encrypted root partition var
+	encrootpartition="mapper/cryptroot"
+	# other var stuff
+	oldrootpartition="$rootpartition"
+	rootpartition="$encrootpartition"
+	echo ""
+fi
+
 echo "${green}Formatting the ${bold}root partition$end ${green}to $filesystem...$end"
 echo ""
 case "$filesystem" in
@@ -354,11 +371,17 @@ echo ""
 
 # mount the partition/s
 echo "Mounting the partitions..."
-mount /dev/"$rootpartition" "$mountpoint"
-if [ -z "$uefi" ]; then
+if [[ -n "$luks" ]]; then
+	mount /dev/"$encrootpartition" "$mountpoint"
+else
+	mount /dev/"$rootpartition" "$mountpoint"
+fi
+if [[ -n "$uefi" ]]; then
 	mkdir "$mountpoint"/efi
 	mount /dev/"$efipartition" "$mountpoint"/efi
 fi
+
+if [[ -n "$luks" ]]; then rootpartition="$oldrootpartition"; fi
 
 clear
 
@@ -374,15 +397,16 @@ nano
 #micro
 #vim
 
-# window managers
+# window managers (don't forget xorg)
 #i3-gaps
 #bspwm
 #openbox
 #xmonad
 #awesome
 #herbstluftwm
+#xorg
 
-# desktop environments (best to choose only one)
+# desktop environments (choose one)
 # a display manager gets automatically installed 
 # depending on which desktop environment you select
 #gnome
@@ -401,7 +425,6 @@ nano
 neofetch
 #man-db
 #pulseaudio
-#xorg
 EOF
 
 echo ""
@@ -476,7 +499,7 @@ echo ""
 
 # make the fstab
 echo "Generating the fstab..."
-genfstab -U "$mountpoint" >> "$mountpoint"/etc/fstab
+genfstab -U "$mountpoint" > "$mountpoint"/etc/fstab
 
 clear
 
@@ -485,7 +508,7 @@ set +e
 
 # declare stuff and supress any error messages (expected)
 echo "Declaring variables..."
-declare -p uefi disk dm de filesystem removable username swapsize hostname > "$mountpoint"/varstuff 2> /dev/null
+declare -p uefi disk dm de filesystem removable username swapsize hostname luks rootpartition > "$mountpoint"/varstuff 2> /dev/null
 
 set -e
 echo ""
@@ -754,8 +777,7 @@ fi
 echo ""
 
 # enable DE services
-if [[ -z "$de" ]]; then :
-else
+if [[ -n "$de" ]]; then
 	echo ""
 	echo "Enabling DE-specific service..."
 	systemctl enable "$dm"
@@ -765,7 +787,10 @@ clear
 
 echo "${green}Installing the CPU microcode...$end"
 echo ""
-if [[ -z "$removable" ]]; then
+if [[ -n "$removable" ]]; then
+	# install both because removable
+	pacman -S amd-ucode intel-ucode --noconfirm
+else
 	while true; do
 	# read CPU vendor (for microcode)
 	read -n 1 -rp "${blue}Intel$end or ${red}AMD$end CPU? " cpu
@@ -778,9 +803,6 @@ if [[ -z "$removable" ]]; then
 	esac
 	
 	done # while loop
-else
-	# install both because removable
-	pacman -S amd-ucode intel-ucode --noconfirm
 fi
 
 echo ""
@@ -792,20 +814,36 @@ echo ""
 pacman -S grub --noconfirm
 echo ""
 
+# extra stuff needed for LUKS
+if [[ -n "$luks" ]]; then
+	echo "${green}Doing LUKS stuff..."
+	
+	rootuuid="$(ls -l /dev/disk/by-uuid | grep $rootpartition | cut -d' ' -f9)"
+	sed -i 's/#GRUB_ENABLE_CRYPTODISK/GRUB_ENABLE_CRYPTODISK/g' /etc/default/grub
+	sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=\"/GRUB_CMDLINE_LINUX_DEFAULT=\"cryptdevice=UUID=$rootuuid:cryptroot /g" /etc/default/grub
+	
+	# also does it on the comment but ehh
+	sed -i 's/autodetect/autodetect keyboard keymap /g' /etc/mkinitcpio.conf
+	sed -i 's/block/block encrypt /g' /etc/mkinitcpio.conf
+
+	mkinitcpio -P
+	echo ""
+fi
+
 # different installation methods based on the boot mode
-if [ -z "$uefi" ]; then
+if [[ -n "$uefi" ]]; then
 	pacman -S efibootmgr --noconfirm
 	echo ""
-	if [[ -z "$removable" ]]; then
-		grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB
-	else
+	if [[ -n "$removable" ]]; then
 		grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB --removable --recheck
+	else
+		grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB
 	fi
 else
-	if [[ -z "$removable" ]]; then
-		grub-install /dev/"$disk"
-	else
+	if [[ -n "$removable" ]]; then
 		grub-install /dev/"$disk" --recheck
+	else
+		grub-install /dev/"$disk"
 	fi
 fi
 
@@ -847,6 +885,9 @@ sleep 1
 # unmount the filesystems
 echo "Unmounting the filesystems..."
 umount -R "$mountpoint"
+
+# luks stuff
+if [[ -n "$luks" ]]; then cryptsetup close /dev/"$encrootpartition"; fi
 
 echo ""
 
