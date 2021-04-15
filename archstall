@@ -89,7 +89,7 @@ while getopts "hp:e:lf:m:s:u:n:r" arg; do
 		n | hostname ) hostname="$OPTARG" ;;
 		r | removable ) removable=y ;;
 		? )
-			echo "${red}Invalid flag!$end"
+			echo "${red}Invalid argument!$end"
 			echo ""
 			exit 1
 			;;
@@ -100,22 +100,6 @@ done
 invalidoption() {
 	echo "${red}Invalid option!$end"
 	echo ""
-}
-
-selectfs() {
-	if [[ -z "$filesystem" ]]; then
-		while true; do
-		read -n 1 -rp "Select the ${bold}root filesystem$end: ext(4), (x)fs, (b)trfs [ext4] " filesystem
-		echo ""
-		
-		case "$filesystem" in
-			E | e | 4 | "" ) filesystem=ext4; break ;;
-			B | b ) filesystem=btrfs; break ;;
-			X | x ) filesystem=xfs; break ;;
-			* ) invalidoption ;;
-		esac
-		done # while loop
-	fi
 }
 
 selectpartitions() {
@@ -159,7 +143,6 @@ selectefipartition() {
 		echo ""
 	elif [[ -n "$uefi" ]]; then
 		formatefipartition
-		echo ""
 	fi
 }
 
@@ -216,19 +199,19 @@ if [[ $(findmnt "$mountpoint") ]]; then
 fi
 
 if [[ -z "$rootpartition" ]]; then
+	lsblk
+	echo ""
 	while true; do
-		lsblk
+	read -rp "Select the disk you want to use ${red}(not a partition)$end /dev/" disk
+	if [[ "$(lsblk)" != *"$disk"* ]] || [[ "$disk" == "" ]]; then
+		echo "${red}Disk doesn't exist!$end"
 		echo ""
-		while true; do
-		read -rp "Select the disk you want to use ${red}(not a partition)$end /dev/" disk
-		if [[ "$(lsblk)" == *"$disk"* ]]; then
-			break
-		else
-			echo "${red}Disk doesn't exist!$end"
-			echo ""
-		fi
-		done # while loop
-		
+	elif [[ "$(lsblk)" == *"$disk"* ]]; then
+		break
+	fi
+	done # while loop echo
+
+	while true; do
 		read -n 1 -rp "(a)utomatic, (m)anual, or (s)kip disk partitioning? [automatic] " partitioning 
 		echo ""
 		
@@ -290,7 +273,6 @@ if [[ -z "$rootpartition" ]]; then
 					rootpartition="$(lsblk -r -o NAME | grep $disk | sort | sed 1d | sed -n 1p)"
 				fi
 
-				selectfs
 				break
 				;;
 
@@ -311,7 +293,6 @@ if [[ -z "$rootpartition" ]]; then
 				echo ""
 
 				selectpartitions
-				selectfs
 				clear
 				break
 				;;
@@ -320,7 +301,6 @@ if [[ -z "$rootpartition" ]]; then
 				echo "Skipping..."
 				echo ""
 				selectpartitions
-				selectfs
 				break
 				;;
 
@@ -331,15 +311,15 @@ if [[ -z "$rootpartition" ]]; then
 else
 	disk="$(lsblk -no pkname /dev/$rootpartition)"
 	selectefipartition
-	selectfs
 fi
 
 echo ""
 
 # some luks stuff
 if [[ -n "$luks" ]]; then
+	echo ""
 	echo "${green}Encrypting /dev/$rootpartition...$end"
-	cryptsetup -y --type luks1 luksFormat /dev/"$rootpartition"
+	cryptsetup -y -q --type luks1 luksFormat /dev/"$rootpartition"
 	echo ""
 	echo "${green}Opening encrypted /dev/$rootpartition...$end"
 	cryptsetup open /dev/"$rootpartition" cryptroot
@@ -350,6 +330,20 @@ if [[ -n "$luks" ]]; then
 	oldrootpartition="$rootpartition"
 	rootpartition="$encrootpartition"
 	echo ""
+fi
+
+if [[ -z "$filesystem" ]]; then
+	while true; do
+	read -n 1 -rp "Select the ${bold}root filesystem$end: ext(4), (x)fs, (b)trfs [ext4] " filesystem
+	echo ""
+	
+	case "$filesystem" in
+		E | e | 4 | "" ) filesystem=ext4; break ;;
+		B | b ) filesystem=btrfs; break ;;
+		X | x ) filesystem=xfs; break ;;
+		* ) invalidoption ;;
+	esac
+	done # while loop
 fi
 
 echo "${green}Formatting the ${bold}root partition$end ${green}to $filesystem...$end"
@@ -371,11 +365,7 @@ echo ""
 
 # mount the partition/s
 echo "Mounting the partitions..."
-if [[ -n "$luks" ]]; then
-	mount /dev/"$encrootpartition" "$mountpoint"
-else
-	mount /dev/"$rootpartition" "$mountpoint"
-fi
+mount /dev/"$rootpartition" "$mountpoint"
 if [[ -n "$uefi" ]]; then
 	mkdir "$mountpoint"/efi
 	mount /dev/"$efipartition" "$mountpoint"/efi
@@ -535,7 +525,7 @@ end=$(tput sgr0)
 set -e
 
 # source the variables
-. /varstuff
+source /varstuff
 
 # functions
 invalidoption() {
@@ -882,12 +872,12 @@ set +e
 #wait a bit because yes
 sleep 1
 
-# unmount the filesystems
-echo "Unmounting the filesystems..."
-umount -R "$mountpoint"
-
 # luks stuff
 if [[ -n "$luks" ]]; then cryptsetup close /dev/"$encrootpartition"; fi
+
+# unmount the filesystems
+echo "Unmounting filesystem/s..."
+umount -R "$mountpoint"
 
 echo ""
 
