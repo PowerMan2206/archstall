@@ -84,7 +84,17 @@ while getopts "hp:e:lf:m:s:u:n:r" arg; do
 			fi
 			;;
 		
-		s | swapfile ) swapsize="$OPTARG" ;;
+		s | swapfile ) 
+			case "$OPTARG" in
+				n ) swapsize="$OPTARG" ;;
+				"" | *[!0-9]* )
+					echo "${red}Swap value not a number!$end"
+					echo "" 
+					exit 1
+					;;
+				* ) swapsize="$OPTARG" ;;
+			esac
+			;;
 		u | username ) username="${OPTARG,,}" ;;
 		n | hostname ) hostname="$OPTARG" ;;
 		r | removable ) removable=y ;;
@@ -113,8 +123,7 @@ selectpartitions() {
 	if [[ "$rootdisks" != *"$rootpartition"* ]] || [[ "$rootpartition" == "" ]]; then
 			echo "${red}Partition doesn't exist!$end"
 			echo ""
-	elif [[ "$rootdisks" == *"$rootpartition"* ]]; then
-		break
+	elif [[ "$rootdisks" == *"$rootpartition"* ]]; then break
 	fi
 	done # while loop
 	
@@ -132,12 +141,12 @@ selectefipartition() {
 		
 		while true; do
 		read -rp "What's the ${bold}EFI partition${end}? /dev/" efipartition
-		if [[ "$efidisks" == *"$efipartition"* ]]; then
-			formatefipartition
-			break
-		elif [[ "$efidisks" != *"$efipartition"* ]] || [[ "$efipartition" == "" ]]; then
+		if [[ "$efidisks" != *"$efipartition"* ]] || [[ "$efipartition" == "" ]]; then
 			echo "${red}Partition doesn't exist!$end"
 			echo ""
+		elif [[ "$efidisks" == *"$efipartition"* ]]; then
+			formatefipartition
+			break
 		fi
 		done # while loop
 		echo ""
@@ -150,6 +159,38 @@ formatefipartition() {
 	echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
 	echo ""
 	mkfs.fat -F32 /dev/"$efipartition"
+}
+
+luksstuff() {
+	# stop the script from dying if the passwords don't match
+	set +e
+	
+	echo "${green}Encrypting /dev/$rootpartition...$end"
+	while true; do
+		cryptsetup -y -q --type luks1 luksFormat /dev/"$rootpartition"
+		if [[ "$?" != 0 ]]; then
+			echo ""
+		else break
+		fi
+	done # while loop
+	
+	echo ""
+	echo "${green}Opening /dev/$rootpartition...$end"
+	while true; do
+		cryptsetup open /dev/"$rootpartition" cryptroot
+		if [[ "$?" != 0 ]]; then
+			echo ""
+		else break
+		fi
+	done # while loop
+	set -e
+
+	# set encrypted root partition var
+	encrootpartition="mapper/cryptroot"
+	# other var stuff
+	oldrootpartition="$rootpartition"
+	rootpartition="$encrootpartition"
+	echo ""	
 }
 
 clear 
@@ -316,20 +357,22 @@ fi
 echo ""
 
 # some luks stuff
-if [[ -n "$luks" ]]; then
-	echo ""
-	echo "${green}Encrypting /dev/$rootpartition...$end"
-	cryptsetup -y -q --type luks1 luksFormat /dev/"$rootpartition"
-	echo ""
-	echo "${green}Opening encrypted /dev/$rootpartition...$end"
-	cryptsetup open /dev/"$rootpartition" cryptroot
-
-	# set encrypted root partition var
-	encrootpartition="mapper/cryptroot"
-	# other var stuff
-	oldrootpartition="$rootpartition"
-	rootpartition="$encrootpartition"
-	echo ""
+if [[ -z "$luks" ]]; then
+	while true; do
+		read -n 1 -rp "Use LUKS1 encryption on the root partition? [n] " wantluks
+		echo ""
+		case "$wantluks" in
+			Y | y ) echo ""; luks=y; luksstuff; break ;;
+			N | n  | "" )
+				echo "Skipping..."
+				echo ""
+				break
+				;;
+			* ) invalidoption ;;
+		esac
+	done # while loop
+elif [[ -n "$luks" ]]; then
+	luksstuff
 fi
 
 if [[ -z "$filesystem" ]]; then
@@ -349,14 +392,14 @@ fi
 echo "${green}Formatting the ${bold}root partition$end ${green}to $filesystem...$end"
 echo ""
 case "$filesystem" in
-	ext4 ) mkfs.ext4 -F /dev/"$rootpartition" ;;
+	ext4 ) mkfs.ext4 -q -F /dev/"$rootpartition" ;;
 	btrfs )
-		mkfs.btrfs -f /dev/"$rootpartition"
+		mkfs.btrfs -q -f /dev/"$rootpartition"
 		echo "btrfs-progs" >> packages
 		;;
 	
 	xfs )
-		mkfs.xfs -f /dev/"$rootpartition"
+		mkfs.xfs -q -f /dev/"$rootpartition"
 		echo "xfsprogs" >> packages
 		;;	
 esac
@@ -469,21 +512,24 @@ while true; do
 	echo ""
 	pacstrap "$mountpoint" base base-devel - < packagesclean
 	
-	case $? in
-		0 ) break ;;
-		* ) 
-			echo ""
-			echo "${red}Something went wrong!$end"
-			echo "Read pacstrap message above"
-			echo "Perhaps a space at the end of a package name?"
-			read -n 1 -rsp "Press any key to retry... "
-			clear
-			;;
-	esac
+	if [[ "$?" != 0 ]]; then
+		echo ""
+		echo "${red}Something went wrong!$end"
+		echo "Read pacstrap message above"
+		echo "Perhaps a space at the end of a package name?"
+		read -n 1 -rsp "Press any key to retry... "
+		clear
+	else break
+	fi
 
 done # while loop
 
-# no more mistakes
+echo ""
+
+# declare stuff and supress any error messages (expected)
+echo "Declaring variables..."
+declare -p uefi disk dm de filesystem removable username swapsize hostname luks rootpartition > "$mountpoint"/varstuff 2> /dev/null
+
 set -e
 echo ""
 
@@ -492,16 +538,6 @@ echo "Generating the fstab..."
 genfstab -U "$mountpoint" > "$mountpoint"/etc/fstab
 
 clear
-
-# it'll error out since it's probably declaring non-existant vars
-set +e
-
-# declare stuff and supress any error messages (expected)
-echo "Declaring variables..."
-declare -p uefi disk dm de filesystem removable username swapsize hostname luks rootpartition > "$mountpoint"/varstuff 2> /dev/null
-
-set -e
-echo ""
 
 # write the second script
 echo "${green}Writing the second script...$end"
@@ -536,8 +572,15 @@ invalidoption() {
 userstuff() {
 	echo "Adding user ${yellow}$username$end"
 	useradd -m "$username"
+	
 	echo "Setting the ${yellow}user$end password..."
-	passwd "$username"
+	while true; do
+		passwd "$username"
+		if [[ "$?" != 0 ]]; then
+			echo ""
+		else break
+		fi
+	done # while loop
 	
 	# create sudo group
 	groupadd sudo
@@ -551,7 +594,7 @@ userstuff() {
 	echo ""
 	case $aur in
 		Y | y )
-			pacman -S git base-devel --noconfirm
+			pacman -S git --noconfirm
 			cd /home/"$username"
 			sudo -u "$username" git clone https://aur.archlinux.org/paru-bin.git
 			cd paru-bin
@@ -570,6 +613,7 @@ userstuff() {
 	esac
 	done # while loop
 }
+
 
 swapstuff() {
 	# if no input is given, default to 1024
@@ -601,7 +645,8 @@ echo ""
 while true; do
 read -rp "Select your ${yellow}region$end: " region
 
-if [[ -d /usr/share/zoneinfo/"$region" ]]; then
+if [[ "$region" == "" ]]; then invalidoption
+elif [[ -d /usr/share/zoneinfo/"$region" ]]; then
 	while true; do
 	echo ""
 	# same but for city
@@ -609,7 +654,8 @@ if [[ -d /usr/share/zoneinfo/"$region" ]]; then
 	echo ""
 	read -rp "Select your ${yellow}city$end: " city
 	
-	if [[ -f /usr/share/zoneinfo/"$region"/"$city" ]]; then
+	if [[ "$city" == "" ]]; then invalidoption
+	elif [[ -f /usr/share/zoneinfo/"$region"/"$city" ]]; then
 		echo ""
 		echo "Setting the ${bold}timezone$end..."
 		ln -sf /usr/share/zoneinfo/"$region"/"$city" /etc/localtime
@@ -620,12 +666,10 @@ if [[ -d /usr/share/zoneinfo/"$region" ]]; then
 	
 	done # while loop
 	break
-
 elif [[ -f /usr/share/zoneinfo/"$region" ]]; then
 	echo "Setting the ${bold}timezone$end..."
 	ln -sf /usr/share/zoneinfo/"$region" /etc/localtime
 	break
-
 else 
 	invalidoption
 fi
@@ -652,18 +696,26 @@ if [[ -z "$hostname" ]]; then
 	read -rp "${yellow}hostname$end [localhost] : " hostname
 	case "$hostname" in
 		"" ) echo localhost > /etc/hostname ;;
-		*  ) echo "$hostname" > /etc/hostname ;;
+		* ) echo "$hostname" > /etc/hostname ;;
 	esac
 else
 	echo "$hostname" > /etc/hostname
 fi
-
 echo "Setting the ${yellow}hostname$end..."
 
 echo ""
 
+# in case of a password mismatch
+set +e
+
 echo "Setting the ${red}root$end password..."
-passwd
+while true; do
+	passwd
+	if [[ "$?" != 0 ]]; then
+		echo ""
+	else break
+	fi
+done # while loop
 
 echo ""
 
@@ -671,13 +723,15 @@ if [[ -z "$username" ]]; then
 	read -rp "What do you want to name your ${yellow}user$end? (empty for no user) " usernametmp
 	username="${usernametmp,,}"
 	case "$username" in
-			"" ) echo "Skipping..." ;;
-			* ) userstuff ;;
+		"" ) echo "Skipping..." ;;
+		* ) userstuff ;;
 	esac
 elif [[ "$username" != n ]]; then 
 	userstuff
 elif [[ "$username" == n ]]; then :
 fi
+
+set -e
 
 clear
 
@@ -746,7 +800,18 @@ if [[ -z "$swapsize" ]]; then
 		
 		case "$swap" in
 			Y | y )
-				read -rp "Swapfile size (in MiB) [1024]: " swapsize
+				while true; do
+					read -rp "Swapfile size (in MiB) [1024]: " swapsize
+					case "$swapsize" in
+						"" | *[!0-9]* ) 
+							echo "Value not a number!"
+							echo "" 
+							;;
+						* ) break ;;
+					esac
+					
+				done # while loop
+				
 				swapstuff
 				break
 				;;	
@@ -806,12 +871,12 @@ echo ""
 
 # extra stuff needed for LUKS
 if [[ -n "$luks" ]]; then
-	echo "${green}Doing LUKS stuff..."
+	echo "${green}Doing LUKS stuff...$end"
 	
 	rootuuid="$(ls -l /dev/disk/by-uuid | grep $rootpartition | cut -d' ' -f9)"
 	sed -i 's/#GRUB_ENABLE_CRYPTODISK/GRUB_ENABLE_CRYPTODISK/g' /etc/default/grub
 	sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=\"/GRUB_CMDLINE_LINUX_DEFAULT=\"cryptdevice=UUID=$rootuuid:cryptroot /g" /etc/default/grub
-	
+
 	# also does it on the comment but ehh
 	sed -i 's/autodetect/autodetect keyboard keymap /g' /etc/mkinitcpio.conf
 	sed -i 's/block/block encrypt /g' /etc/mkinitcpio.conf
@@ -872,18 +937,18 @@ set +e
 #wait a bit because yes
 sleep 1
 
-# luks stuff
-if [[ -n "$luks" ]]; then cryptsetup close /dev/"$encrootpartition"; fi
-
 # unmount the filesystems
 echo "Unmounting filesystem/s..."
 umount -R "$mountpoint"
+
+# luks stuff
+if [[ -n "$luks" ]]; then cryptsetup close /dev/"$encrootpartition"; fi
 
 echo ""
 
 # reboot
 echo "${bold}${green}Installation finished!$end"
-read -n 1 -rsp  "Press any key to reboot... "
+read -n 1 -rsp "Press any key to reboot... "
 echo ""
 
 reboot
