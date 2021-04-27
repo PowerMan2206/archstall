@@ -24,7 +24,7 @@ while getopts "hp:e:lf:m:s:u:n:r" arg; do
 			echo "-e [partition]  EFI partition ${bold}(UEFI systems only)$end"
 			echo "${bold}                heads up: the selected root/EFI partition will be wiped!$end"
 			echo "-l              use LUKS1 encryption on the root partition"
-			echo "-f [filesystem] Filesystem to use on the root partition (ext4, btrfs, xfs)"
+			echo "-f [filesystem] Filesystem to use on the root partition (ext4, f2fs, btrfs, xfs)"
 			echo "-m [location]   root partition mountpoint [/mnt]"
 			echo "${yellow}-s [number]$end     swapfile size (in MiB) [n]"
 			echo "${yellow}-u [username]$end   change default user username [n]"
@@ -61,7 +61,7 @@ while getopts "hp:e:lf:m:s:u:n:r" arg; do
 		l ) luks=y ;;
 		f )
 			case "$OPTARG" in
-				e | ext4 | b | btrfs | x | xfs ) filesystem="$OPTARG" ;;
+				e | ext4 | f | f2fs | b | btrfs | x | xfs ) filesystem="$OPTARG" ;;
 				* ) 
 					echo "${red}Invalid filesystem!$end"
 					echo ""
@@ -184,8 +184,7 @@ luksstuff() {
 clear 
 
 echo "${bold}${green}Archstall Arch Linux installer $end"
-echo "${red}This script comes with no warranty, screwing up your system is your fault
-You can cancel the script at any time by holding down Ctrl+C $end"
+echo "${red}This script comes with no warranty, screwing up your system is your fault$end"
 
 if [[ -n "$removable" ]]; then echo "Installation for a removable device"; fi
 
@@ -366,10 +365,10 @@ fi
 
 if [[ -z "$filesystem" ]]; then
 	while true; do
-		read -n 1 -rp "Select the ${bold}root filesystem$end: (e)xt4, (x)fs, (b)trfs [ext4] " filesystem
+		read -n 1 -rp "Select the ${bold}root filesystem$end: (e)xt4, (f)2fs, (x)fs, (b)trfs [ext4] " filesystem
 		echo ""
 		case "$filesystem" in
-			e | "" | b | x ) break ;;
+			e | "" | f | b | x ) break ;;
 			* ) invalidoption ;;
 		esac
 	done # while loop
@@ -379,6 +378,10 @@ echo "${green}Formatting the ${bold}root partition$end ${green}to $filesystem...
 echo ""
 case "$filesystem" in
 	e | "" | ext4 ) mkfs.ext4 -q -F /dev/"$rootpartition" || exit ;;
+	f | f2fs ) 
+		mkfs.f2fs -q -f /dev/"$rootpartition" || exit 
+		echo "f2fs-tools" >> packages
+		;;
 	b | btrfs )
 		mkfs.btrfs -q -f /dev/"$rootpartition" || exit
 		echo "btrfs-progs" >> packages
