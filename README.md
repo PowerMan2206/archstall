@@ -1,3 +1,6 @@
+**NOT DEAD**
+I'm just rewriting it for a while
+
 # Archstall
 Simple Arch Linux installer.
 
