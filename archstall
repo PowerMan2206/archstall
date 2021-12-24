@@ -12,185 +12,32 @@ end=$(tput sgr0)
 
 mountpoint=/mnt
 
-while getopts "hp:e:lf:m:s:u:n:r" arg; do
-	case "$arg" in
-		h )
-			echo "${bold}${green}Archstall Arch Linux installer $end"
-			echo "${bold}https://github.com/PowerMan2206/archstall"
-			echo ""
-			echo "Usage:$end"
-			echo "-h              show this help menu and exit"
-			echo "-p [partition]  partition on which to install Arch"
-			echo "-e [partition]  EFI partition ${bold}(UEFI systems only)$end"
-			echo "${bold}                heads up: the selected root/EFI partition will be wiped!$end"
-			echo "-l              use LUKS1 encryption on the root partition"
-			echo "-f [filesystem] Filesystem to use on the root partition (ext4, f2fs, btrfs, xfs)"
-			echo "-m [location]   root partition mountpoint [/mnt]"
-			echo "${yellow}-s [number]$end     swapfile size (in MiB) [n]"
-			echo "${yellow}-u [username]$end   change default user username [n]"
-			echo "-n [hostname]   change hostname [localhost]"
-			echo "-r              install on a removable device [n]"
-			echo ""
-			echo "Setting any of the ${yellow}yellow$end arguments as \`n\`"
-			echo "skips them in the installation process"
-			echo ""
-			
-			exit
-			;;
-		
-		p )
-			if [[ "$(lsblk)" == *"$OPTARG"* ]]; then
-				rootpartition="$OPTARG"
-			else
-				echo "${red}Root partition doesn't exist!$end"
-				echo ""
-				exit 1
-			fi
-			;;
-		
-		e )
-			if [[ "$(lsblk)" == *"$OPTARG"* ]]; then
-				efipartition="$OPTARG"
-			else
-				echo "${red}EFI partition doesn't exist!$end"
-				echo ""
-				exit 1
-			fi
-			;;
-
-		l ) luks=y ;;
-		f )
-			case "$OPTARG" in
-				e | ext4 | f | f2fs | b | btrfs | x | xfs ) filesystem="$OPTARG" ;;
-				* ) 
-					echo "${red}Invalid filesystem!$end"
-					echo ""
-					exit 1
-					;;
-			esac
-			;;
-		
-		m )
-			if [[ -d "$mountpoint" ]]; then
-				mountpoint="$OPTARG"
-			else
-				echo "${red}Mountpoint doesn't exist!"
-				echo ""
-				exit 1
-			fi
-			;;
-		
-		s )
-			case "$OPTARG" in
-				n ) swapsize="$OPTARG" ;;
-				"" | *[!0-9]* )
-					echo "${red}Swap value not a number!$end"
-					echo "" 
-					exit 1
-					;;
-				* ) swapsize="$OPTARG" ;;
-			esac
-			;;
-		u ) username="${OPTARG,,}" ;;
-		n ) hostname="$OPTARG" ;;
-		r ) removable=y ;;
-		? )
-			echo "${red}Invalid argument!$end"
-			echo ""
-			exit 1
-			;;
-	esac
-done
-
 #functions
+error() {
+	echo "${bold}${red}ERROR:$end $1"
+}
+
 invalidoption() {
-	echo "${red}Invalid option!$end"
-	echo ""
+	error "invalid option!"
 }
 
-selectpartitions() {
-	# ask for the root partition
-	rootdisks="$(lsblk | grep "$disk")"
-	echo "$rootdisks"
-	echo ""
-	
-	while true; do
-	read -rp "What's the ${bold}root partition${end}? /dev/" rootpartition
-	if [[ "$rootdisks" != *"$rootpartition"* ]] || [[ "$rootpartition" == "" ]]; then
-			echo "${red}Partition doesn't exist!$end"
-			echo ""
-	elif [[ "$rootdisks" == *"$rootpartition"* ]]; then break
-	fi
-	done # while loop
-	
-	echo ""
-	
-	# also EFI partition if in UEFI
-	selectefipartition
+namepartition() {
+	lsblk -rno name | grep "$disk" | sed 1d | sed -n "$1"p
 }
 
-selectefipartition() {
-	if [[ -n "$uefi" ]] && [[ -z "$efipartition" ]]; then
-		efidisks="$(lsblk | grep -v "$rootpartition")"
-		echo "$efidisks"
-		echo ""
-		
-		while true; do
-		read -rp "What's the ${bold}EFI partition${end}? /dev/" efipartition
-		if [[ "$efidisks" != *"$efipartition"* ]] || [[ "$efipartition" == "" ]]; then
-			echo "${red}Partition doesn't exist!$end"
-			echo ""
-		elif [[ "$efidisks" == *"$efipartition"* ]]; then
-			formatefipartition
-			break
-		fi
-		done # while loop
-		echo ""
-	elif [[ -n "$uefi" ]]; then
-		formatefipartition
-	fi
-}
-
-formatefipartition() {
-	echo "${green}Formatting the ${bold}EFI partition$end ${green}to FAT32...$end"
-	echo ""
-	mkfs.fat -F32 /dev/"$efipartition" || exit
-}
-
-luksstuff() {
-	echo "${green}Encrypting /dev/$rootpartition...$end"
-	while true; do
-		if ! cryptsetup -y -q --type luks1 luksFormat /dev/"$rootpartition"; then echo ""
-		else break
-		fi
-	done # while loop
-	
-	echo ""
-	echo "${green}Opening /dev/$rootpartition...$end"
-	while true; do
-		if ! cryptsetup open /dev/"$rootpartition" cryptroot; then echo ""
-		else break
-		fi
-	done # while loop
-
-	# set encrypted root partition var
-	encrootpartition="mapper/cryptroot"
-	# other var stuff
-	oldrootpartition="$rootpartition"
-	rootpartition="$encrootpartition"
-	echo ""	
+autocomplete() {
+	cd $(mktemp -d)
+	touch $@
 }
 
 clear 
 
-echo "${bold}${green}Archstall Arch Linux installer $end"
+echo "${bold}${green}Archstall Arch Linux installer$end"
 echo "${red}This script comes with no warranty, screwing up your system is your fault$end"
 
-if [[ -n "$removable" ]]; then echo "Installation for a removable device"; fi
-
-echo ""
-read -n 1 -rsp "Press any key to continue... "
-echo ""; echo ""
+echo
+read -n 1 -sp "Press any key to continue... "
+echo; echo
 
 # delet packages file if it already exists
 # (little dev stuff)
@@ -200,16 +47,16 @@ if [[ -f packages ]]; then rm packages; fi
 # check the boot mode
 if [[ -d /sys/firmware/efi/efivars ]]; then
 	echo "System booted in ${bold}UEFI$end mode"
-	uefi=y
+	uefi=true
 else
 	# notify user is booted in BIOS
 	echo "System booted in ${bold}BIOS$end mode"
 	echo "Reboot into ${bold}UEFI$end mode if you want to install for that."
 fi
 
-echo ""
-read -n 1 -rsp "Press any key to continue or Ctrl+C to cancel..."
-echo ""; echo ""
+echo
+read -n 1 -sp "Press any key to continue or Ctrl+C to cancel..."
+echo; echo
 
 # set the system clock and wait a bit for the messages
 echo "Ensuring the system clock is accurate..."
@@ -221,195 +68,255 @@ clear
 if [[ $(findmnt "$mountpoint") ]]; then
 	echo "Unmounting disks in $mountpoint..."
 	umount -R "$mountpoint" || exit
-	echo ""
+	echo
 fi
 
-if [[ -z "$rootpartition" ]]; then
-	lsblk
-	echo ""
-	while true; do
-	read -rp "Select the disk you want to use ${red}(not a partition)$end /dev/" disk
-	if [[ "$(lsblk)" != *"$disk"* ]] || [[ "$disk" == "" ]]; then
-		echo "${red}Disk doesn't exist!$end"
-		echo ""
-	elif [[ "$(lsblk)" == *"$disk"* ]]; then break
+# for read tab autocomplete
+cd /dev
+
+# choose disk
+lsblk -dno name,size
+echo
+while true; do
+	read -ep "Select the ${yellow}disk$end you want to use: /dev/" disk
+	if   [[ "$(lsblk -dno name)" != *"$disk"* ]] || [[ "$disk" == "" ]]; then 
+		error "disk doesn't exist!"
+		echo
+	elif [[ "$(lsblk -dno name)" == *"$disk"* ]]; then 
+		break
 	fi
-	done # while loop
+done
 
-	while true; do
-		read -n 1 -rp "(a)utomatic, (m)anual, or (s)kip disk partitioning? [automatic] " partitioning 
-		echo ""
-		
-		case "$partitioning" in
-			a | "" )
-				if [[ -n "$uefi" ]]; then
-					echo "The disk will be partitioned into a 512M ${bold}EFI partition$end and the ${bold}root partition$end taking up the rest"
-				else
-					echo "The disk will be partitioned into a single ${bold}root partition$end taking up the entire disk"
-				fi
-
-				echo ""
-								
-				echo "$bold${red}WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK $end"
-				read -rp "Are you sure you want to continue? You can cancel with Ctrl+C "
-				
-				echo ""
-				echo -n "${red}Erasing disk in "
-				# for loops aren't for nerds
-				for delet in {5..1}; do
-					sleep 0.4
-					echo -n "$delet"
-					sleep 0.4
-					echo -n "."
-					sleep 0.4
-					echo -n "."
-					sleep 0.4
-					echo -n "."
+# partition disk
+while true; do
+	autocomplete automatic manual skip
+	read -ep "(a)utomatic, (m)anual, or (s)kip disk partitioning? [automatic] " partitioning
+	echo
+	
+	case $partitioning in
+		a | automatic | "" )
+			if [[ -n "$uefi" ]]; then
+				echo "The disk will be partitioned into a 512M ${bold}EFI partition$end and a ${bold}root partition$end that takes up the rest"
+			else
+				echo "The disk will be partitioned into a single ${bold}root partition$end taking up the entire disk"
+			fi
+			
+			echo
+			echo "${bold}${red}WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK$end"
+			read -sp "${red}Are you sure you want to continue?$end You can cancel with Ctrl+C"
+			echo
+			echo -n "${red}Erasing disk in "
+			
+			# hell yeah, complications
+			for delet in {5..1}; do
+				echo -n $delet
+				for dot in {1..3}; do
+					sleep 0.25
+					echo -n .
 				done
-				echo "$end"
-
-				echo ""
-
-				if [[ -n "$uefi" ]]; then
-					parted -s /dev/"$disk" mklabel gpt || exit
-					
-					# make EFI partition
-					echo "${green}Making the ${bold}EFI partition...$end"
-					parted -s /dev/"$disk" mkpart P1 1MiB 512MiB || exit
-					efipartition="$(lsblk -r -o NAME | grep "$disk" | sort | sed 1d | sed -n 1p)"
-					
-					# format EFI partition
-					formatefipartition
-					
-					echo ""
-					
-					# make root partition
-					echo "${green}Making the ${bold}root partition...$end"
-					parted -s /dev/"$disk" mkpart P2 512MiB 100% || exit
-					rootpartition="$(lsblk -r -o NAME | grep "$disk" | sort | sed 1d | sed -n 2p)"
+				sleep 0.5
+				echo -n " "
+			done
+			echo "$end"
+			
+			echo
+			
+			if [[ -n "$uefi" ]]; then
+				parted -s /dev/"$disk" mklabel gpt || exit
 				
-				else					
-					parted -s /dev/"$disk" mklabel msdos || exit
+				# make EFI partition
+				echo "${green}Making the ${bold}EFI partition...$end"
+				parted -s /dev/"$disk" mkpart P1 1MiB 512MiB || exit
+				efipartition="$(namepartition 1)"
+				
+				# format EFI partition
+				echo "${green}Formatting the EFI partition...$end"
+				mkfs.fat -F32 /dev/"$efipartition"
+
+				echo
+				
+				# make root partition
+				echo "${green}Making the ${bold}root partition...$end"
+				parted -s /dev/"$disk" mkpart P2 512MiB 100% || exit
+				rootpartition="$(namepartition 2)"
+			
+			else
+				parted -s /dev/"$disk" mklabel msdos || exit
+				
+				# make root partition
+				echo "${green}Making the ${bold}root partition...$end"
+				parted -s /dev/"$disk" mkpart primary 1MiB 100% || exit
+				parted -s /dev/"$disk" set 1 boot on || exit
+				rootpartition="$(namepartition 1)"
+			fi
+			
+			break
+			;;
+		
+		m | manual | s | skip )
+			case $partitioning in
+				m | manual )
 					
-					# make root partition
-					echo "${green}Making the ${bold}root partition...$end"
-					parted -s /dev/"$disk" mkpart primary 1MiB 100% || exit
-					parted -s /dev/"$disk" set 1 boot on || exit
-					rootpartition="$(lsblk -r -o NAME | grep "$disk" | sort | sed 1d | sed -n 1p)"
+					autocomplete fdisk cfdisk parted
+					
+					while true; do
+					read -ep "Do you want to use (f)disk, (c)fdisk or (p)arted? [fdisk] " partitioner
+					echo
+					
+					case "$partitioner" in
+						f | fdisk | "" ) fdisk /dev/"$disk" || exit; break ;;
+						c | cfdisk ) cfdisk /dev/"$disk" || exit; break ;;
+						p | parted ) parted /dev/"$disk" || exit; break ;;
+						* ) invalidoption ;;	
+					esac
+					done # while loop
+					
+					clear
+					;;
+				s | skip ) echo "Skipping..." ;;
+			esac
+			
+			echo
+			
+			# this again
+			cd /dev
+			
+			partitions="$(lsblk -rno name,size | grep "$disk" | sed 1d)"
+			echo "$partitions"
+			echo
+			
+			while true; do
+				read -ep "What's the ${bold}root partition${end}? /dev/" rootpartition
+				if [[ "$partitions" != *"$rootpartition"* ]] || [[ "$rootpartition" == "" ]] || [[ "$rootpartition" == "$disk" ]]; then
+					error "partition doesn't exist!"
+					echo
+				else break
 				fi
-
-				break
-				;;
-
-			#manual partitioning
-			m )
-				while true; do
-				read -n 1 -rp "Do you want to use (f)disk, (c)fdisk or (p)arted? [fdisk] " partitioner
-				echo ""
+			done # while loop
+			
+			if [[ -n "$uefi" ]]; then
+				echo
+				efipartitions="$(lsblk -rno name,size | grep "$disk" | sed 1d | grep -v "$rootpartition")"
+				echo "$efipartitions"
+				echo
 				
-				case "$partitioner" in
-					f | "" ) fdisk /dev/"$disk" || exit; break ;;
-					c ) cfdisk /dev/"$disk" || exit; break ;;
-					p ) parted /dev/"$disk" || exit; break ;;
-					* ) invalidoption ;;	
-				esac
-				done # while loop
+				while true; do
+					read -ep "What's the ${bold}EFI partition${end}? /dev/" efipartition
+					if [[ "$efipartitions" != *"$efipartition"* ]] || [[ "$efipartition" == "" ]] || [[ "$efipartition" == "$disk" ]]; then
+						error "partition doesn't exist!"
+						echo
+					else
+						while true; do
+							echo
+							echo "Do you want to format the ${bold}EFI partition?$end"
+							read -p "Don't do this if you set it up beforehand [n] " formatefi
+							
+							case $formatefi in
+								n | no | "" ) echo "${green}Skipping EFI partition formatting...$end"; break ;;
+								y | yes )
+									echo "${green}Formatting the EFI partition...$end"
+									mkfs.fat -F32 "$efipartition"
+									break
+									;;
+							esac
+						done # while loop		# this
+						break					# is
+					fi							# a
+				done # while loop				# beautiful
+			fi									# mess
+			break								# lmao
+			;;
+	esac
+done
 
-				echo ""
-
-				selectpartitions
-				clear
-				break
-				;;
-
-			s )
-				echo "Skipping..."
-				echo ""
-				selectpartitions
-				break
-				;;
-
-			* ) invalidoption ;;
-		esac
-	done # while loop
-
-else
-	disk="$(lsblk -no pkname /dev/"$rootpartition")"
-	selectefipartition
-fi
-
-echo ""
+echo
 
 # some luks stuff
-if [[ -z "$luks" ]]; then
-	while true; do
-		read -n 1 -rp "Use LUKS1 encryption on the root partition? [n] " wantluks
-		echo ""
-		case "$wantluks" in
-			y )
-				echo ""
-				luks=y
-				luksstuff
-				break
-				;;
-			n  | "" )
-				echo "Skipping..."
-				echo ""
-				break
-				;;
-			* ) invalidoption ;;
-		esac
-	done # while loop
-elif [[ -n "$luks" ]]; then luksstuff
-fi
+while true; do
+	read -p "Use LUKS1 encryption on the root partition? [n] " luks
+	echo
+	case "$luks" in
+		y | yes )
+			echo "${green}Encrypting /dev/$rootpartition...$end"
+			while true; do
+				if ! cryptsetup -y -q --type luks1 luksFormat /dev/"$rootpartition"; then echo
+				else break
+				fi
+			done # while loop
+			
+			echo
+			
+			echo "${green}Opening /dev/$rootpartition...$end"
+			while true; do
+				if ! cryptsetup open /dev/"$rootpartition" cryptroot; then echo
+				else break
+				fi
+			done # while loop
+			
+			# var stuff
+			encrootpartition="mapper/cryptroot"
+			oldrootpartition="$rootpartition"
+			rootpartition="$encrootpartition"
+			luks=true
+			
+			echo
+			break
+			;;
+		n  | no | "" ) echo "Skipping..."; break ;;
+	esac
+done # while loop
 
-if [[ -z "$filesystem" ]]; then
-	while true; do
-		read -n 1 -rp "Select the ${bold}root filesystem$end: (e)xt4, (f)2fs, (x)fs, (b)trfs [ext4] " filesystem
-		echo ""
-		case "$filesystem" in
-			e | "" | f | b | x ) break ;;
-			* ) invalidoption ;;
-		esac
-	done # while loop
-fi
+clear
 
-echo "${green}Formatting the ${bold}root partition$end ${green}to $filesystem...$end"
-echo ""
+# TODO: clean up entire filesystem thing maybe
+while true; do
+	autocomplete ext4 f2fs xfs btrfs
+	echo
+	read -ep "Select the ${bold}root filesystem$end: (e)xt4, (f)2fs, (x)fs, (b)trfs [ext4] " filesystem
+	case "$filesystem" in
+		e | ext4 | "" | f | f2fs | b | btrfs | x | xfs ) break ;;
+		* ) invalidoption ;;
+	esac
+done # while loop
+
+echo "${green}Formatting the ${bold}root partition$end ${green}...$end"
+echo
 case "$filesystem" in
-	e | "" | ext4 ) mkfs.ext4 -q -F /dev/"$rootpartition" || exit ;;
+	e | "" | ext4 ) 
+		mkfs.ext4 -F /dev/"$rootpartition" || exit 
+		;;
 	f | f2fs ) 
-		mkfs.f2fs -q -f /dev/"$rootpartition" || exit 
+		mkfs.f2fs -f /dev/"$rootpartition" || exit 
 		echo "f2fs-tools" >> packages
 		;;
 	b | btrfs )
-		mkfs.btrfs -q -f /dev/"$rootpartition" || exit
+		mkfs.btrfs -f /dev/"$rootpartition" || exit
 		echo "btrfs-progs" >> packages
 		;;
-	
 	x | xfs )
-		mkfs.xfs -q -f /dev/"$rootpartition" || exit
+		mkfs.xfs -f /dev/"$rootpartition" || exit
 		echo "xfsprogs" >> packages
 		;;	
 esac
 
-echo ""
 
-# mount the partition/s
-echo "Mounting the partitions..."
+echo
+
+# mount partition/s
+echo "${green}Mounting the partitions...$end"
 mount /dev/"$rootpartition" "$mountpoint"
 if [[ -n "$uefi" ]]; then
 	mkdir "$mountpoint"/efi || exit
 	mount /dev/"$efipartition" "$mountpoint"/efi || exit
 fi
 
-if [[ -n "$luks" ]]; then rootpartition="$oldrootpartition"; fi
-
 clear
 
 # create the package list
-echo "Writing the package list..."
-cat << 'EOF' >> packages
+packages=/tmp/packages
+packagesclean=/tmp/packagesclean
+echo "${green}Writing the package list...$end"
+cat << 'EOF' > $packages
 linux
 #linux-lts
 linux-firmware
@@ -419,111 +326,69 @@ nano
 #micro
 #vim
 
-# window managers (don't forget xorg)
-#i3-gaps
-#bspwm
-#openbox
-#xmonad
-#awesome
-#herbstluftwm
-#xorg
-
-# desktop environments (choose one)
-# a display manager gets automatically installed 
-# depending on which desktop environment you select
-#gnome
-#plasma
-#lxqt
-#mate
-#xfce4
-#xfce4-goodies
-
-# browsers
-#firefox
-#chromium
-#qutebrowser
-
-# other stuff
 neofetch
 #man-db
-#pulseaudio
+#pipewire
 EOF
 
-echo ""
+echo
 
 while true; do
 	# edit package list
 	echo "Add/uncomment packages which you want in the package list"
 	echo "${yellow}Linux, the firmware, polkit, nano, and neofetch are installed by default$end"
-	echo "(also base and base-devel but you can't remove those because the installer dies)"
-	echo ""
+	echo "(also base and base-devel but you can't remove those because the installer ${red}dies$end)"
+	echo
 	
 	while true; do
-	read -n 1 -rp "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
-	echo ""
-	
-	case "$editor" in
-		n | "" ) nano packages; break ;;
-		v ) vim packages; break ;;
-		s ) echo "Skipping package list editing..."; break ;;
-		* ) invalidoption ;;
-	esac
+		autocomplete nano vim skip
+		read -ep "Do you want to edit the package list with (n)ano, (v)im, or (s)kip? [nano] " editor
+		echo
+		
+		case "$editor" in
+			n | nano | "" ) nano $packages; break ;;
+			v | vim ) vim $packages; break ;;
+			s | skip ) echo "${green}Skipping package list editing...$end"; break ;;
+			* ) invalidoption ;;
+		esac
 	done # while loop
 	
-	echo ""
+	echo
 	
 	# take the packages list and get rid of the comments
 	echo "Cleaning up the package list..."
-	grep -v "#" packages > packagesclean || exit
+	grep -v "#" $packages > $packagesclean || exit
 	
-	echo ""
-	
-	# put the DE service in a variable and install extra packages if needed
-	if grep -Fxq "gnome" packagesclean; then
-		dm="gdm"
-		de=y
-	elif grep -Fxq "plasma" packagesclean; then
-		dm="sddm"
-		de=y
-		echo "konsole" >> packagesclean
-	elif grep -Fxq "lxqt" packagesclean || grep -Fxq "mate" packagesclean || grep -Fxq "xfce4" packagesclean; then
-		dm="lightdm"
-		de=y
-		echo "lightdm" >> packagesclean
-		echo "lightdm-gtk-greeter" >> packagesclean
-		echo "xorg-server" >> packagesclean
-	fi
+	echo
 	
 	# read the package list and install those packages
 	echo "${green}Installing packages with pacstrap...$end"
-	echo ""
-	if ! pacstrap "$mountpoint" base base-devel - < packagesclean; then
-		echo ""
+	echo
+	if ! pacstrap "$mountpoint" base base-devel - < $packagesclean; then
+		echo
 		echo "${red}Something went wrong!$end"
 		echo "Read pacstrap message above"
 		echo "Perhaps a space at the end of a package name?"
-		read -n 1 -rsp "Press any key to retry... "
+		read -n 1 -sp "Press any key to retry... "
 		clear
 	else break
 	fi
-
 done # while loop
 
-echo ""
+# TODO: clean this up as well
+declare -p uefi disk filesystem luks oldrootpartition rootpartition > "$mountpoint"/varstuff 2> /dev/null
 
-# declare stuff and supress any error messages (expected)
-echo "Declaring variables..."
-declare -p uefi disk dm de filesystem removable username swapsize hostname luks rootpartition > "$mountpoint"/varstuff 2> /dev/null
+echo
 
 # make the fstab
-echo "Generating the fstab..."
+echo "${green}Generating the fstab...$end"
 genfstab -U "$mountpoint" > "$mountpoint"/etc/fstab || exit
 
 clear
 
 # write the second script
 echo "${green}Writing the second script...$end"
-echo ""
+echo
 
 #----------------------------------------------------------------------------------------------------------------------
 #======================================================================================================================
@@ -543,297 +408,251 @@ end=$(tput sgr0)
 source /varstuff
 
 # functions
+error() {
+	echo "${bold}${red}ERROR:$end $1"
+}
+
 invalidoption() {
-	echo "${red}Invalid option!$end"
-	echo ""
+	error "invalid option!"
 }
 
-userstuff() {
-	echo "Adding user ${yellow}$username$end"
-	useradd -m "$username" || exit
-	
-	echo "Setting the ${yellow}user$end password..."
-	while true; do
-		if ! passwd "$username"; then echo ""
-		else break
-		fi
-	done # while loop
-	
-	# create sudo group
-	groupadd sudo
-	# adding user to sudo group and making the sudo group have sudo stuff
-	gpasswd -a "$username" sudo
-	sed -i 's/# %sudo/%sudo/g' /etc/sudoers
-	
-	while true; do
-	# AUR helper
-	read -n 1 -rp "Install ${yellow}paru$end? [n] " aur
-	echo ""
-	case "$aur" in
-		y )
-			pacman -S git --noconfirm
-			cd /home/"$username"
-			sudo -u "$username" git clone https://aur.archlinux.org/paru-bin.git
-			cd paru-bin
-			sudo -u "$username" makepkg -si --noconfirm
-			cd ..
-			rm -rf paru-bin
-			break
-			;;
-		
-		n | "" )
-			echo "Skipping..."
-			break
-			;;
-		
-		* ) invalidoption ;;
-	esac
-	done # while loop
-}
-
-
-swapstuff() {
-	# btrfs stuff
-	case "$filesystem" in
-		b | btrfs )
-			truncate -s 0 /swapfile || exit
-			chattr +C /swapfile || exit
-			btrfs property set /swapfile compression none || exit
-			;;
-	esac
-	
-	echo "Making Swap..."
-	dd if=/dev/zero of=/swapfile bs=1M count="$swapsize" status=progress || exit
-	chmod 600 /swapfile
-	mkswap /swapfile
-	swapon /swapfile
-	echo "/swapfile none swap defaults 0 0" >> /etc/fstab
+autocomplete() {
+	cd $(mktemp -d)
+	touch $@
 }
 
 # select timezone stuff
-ls /usr/share/zoneinfo
-echo ""
+cd /usr/share/zoneinfo; ls
+echo
 
 while true; do
-read -rp "Select your ${yellow}region$end: " region
+	read -ep "Select your ${yellow}region$end: " timezone
 
-if [[ "$region" == "" ]]; then invalidoption
-elif [[ -d /usr/share/zoneinfo/"$region" ]]; then
-	while true; do
-	echo ""
-	# same but for city
-	ls /usr/share/zoneinfo/"$region"
-	echo ""
-	read -rp "Select your ${yellow}city$end: " city
-	
-	if [[ "$city" == "" ]]; then invalidoption
-	elif [[ -f /usr/share/zoneinfo/"$region"/"$city" ]]; then
-		echo ""
-		echo "Setting the ${bold}timezone$end..."
-		ln -sf /usr/share/zoneinfo/"$region"/"$city" /etc/localtime
+	if [[ "$timezone" == "" ]] || [[ -d "$timezone" ]]; then invalidoption
+	elif [[ -f /usr/share/zoneinfo/"$timezone" ]]; then
+		echo
+		echo "${green}Setting the ${bold}timezone$end${green}...$end"
+		ln -sf /usr/share/zoneinfo/"$timezone" /etc/localtime
 		break
 	else invalidoption
 	fi
-	
-	done # while loop
-	break
-elif [[ -f /usr/share/zoneinfo/"$region" ]]; then
-	echo "Setting the ${bold}timezone$end..."
-	ln -sf /usr/share/zoneinfo/"$region" /etc/localtime
-	break
-else invalidoption
-fi
-
 done # while loop
 
-echo ""
+echo
 
 # somethingsomething time
-echo "Generating ${bold}/etc/adjtime$end..."
+echo "${green}Generating ${bold}/etc/adjtime$end${green}...$end"
 hwclock --systohc || exit
 
-echo ""
+echo
 
 # locale stuff (???)
-echo "Setting the ${bold}locale$end..."
+echo "${green}Setting the ${bold}locale$end${green}...$end"
 sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g' /etc/locale.gen
 locale-gen || exit
 echo "LANG=en_US.UTF-8" > /etc/locale.conf
 
 clear
 
-if [[ -z "$hostname" ]]; then
-	read -rp "${yellow}hostname$end [localhost] : " hostname
-	case "$hostname" in
-		"" ) echo localhost > /etc/hostname ;;
-		* ) echo "$hostname" > /etc/hostname ;;
-	esac
-else echo "$hostname" > /etc/hostname
-fi
-echo "Setting the ${yellow}hostname$end..."
+read -p "${yellow}hostname$end [localhost] : " hostname
+echo "${green}Setting the$end ${yellow}hostname$end${green}...$end"
+case "$hostname" in
+	"" ) echo localhost > /etc/hostname ;;
+	* ) echo "$hostname" > /etc/hostname ;;
+esac
 
-echo ""
+echo
 
-echo "Setting the ${red}root$end password..."
+# for some reason I really like this piece of code
+# it's just so short and great, works perfectly
+# I just think it's neat
+echo "${red}Setting the root password...$end"
 while true; do
-	if ! passwd; then echo ""
+	if ! passwd; then echo
 	else break
 	fi
 done # while loop
 
-echo ""
+echo
 
-if [[ -z "$username" ]]; then
-	read -rp "What do you want to name your ${yellow}user$end? (empty for no user) " usernametmp
-	username="${usernametmp,,}"
-	case "$username" in
-		"" ) echo "Skipping..." ;;
-		* ) userstuff ;;
-	esac
-elif [[ "$username" != n ]]; then userstuff
-elif [[ "$username" == n ]]; then :
-fi
-
-clear
-
-while true; do
-# network setup
-read -n 1 -rp "Configure ${yellow}systemd-network(d)$end, ${yellow}(N)etworkManager$end, or (s)kip? [systemd-networkd] " network
-echo ""
-
-case "$network" in
-	d | "" )
-		# takes the long `ip a` output and shortens it down to just the interfaces
-		interfaces="$(ip a | grep "<" | cut -d':' -f2 | cut -c 2- | grep -v lo)"
-		echo "$interfaces"
-		echo ""
+read -rp "${yellow}username$end: (empty for no user) " username
+username="${username,,}"
+case "$username" in
+	"" ) echo "Skipping..." ;;
+	* ) 
+		echo "${green}Adding user$end ${yellow}$username$end"
+		useradd -m "$username" || exit
 		
+		echo "${green}Setting the$end ${yellow}user$end ${green}password...$end"
 		while true; do
-		read -rp "Select your ${yellow}interface$end: " interface
-		if [[ "$interfaces" != *"$interface"* ]] || [[ "$interface" == "" ]]; then
-			echo "${red}Interface doesn't exist!$end"
-			echo ""
-		elif [[ "$interfaces" == *"$interface"* ]]; then break
-		fi
+			if ! passwd "$username"; then echo
+			else break
+			fi
 		done # while loop
 		
-		echo ""
-
-		# cat thing doesn't work for some reason
-		echo "${green}Writing configuration file and enabling services...$end"
-		echo "[Match]" > /etc/systemd/network/20-network.network
-		echo "Name=$interface" >> /etc/systemd/network/20-network.network
-		echo "[Network]" >> /etc/systemd/network/20-network.network
-		echo "DHCP=yes" >> /etc/systemd/network/20-network.network
+		# sudo stuff
+		groupadd sudo
+		gpasswd -a "$username" sudo
+		sed -i 's/# %sudo/%sudo/g' /etc/sudoers
 		
-		echo "${green}Enabling services...$end"
-		systemctl enable systemd-networkd systemd-resolved || exit
-		
-		break
+		while true; do
+			# AUR helper
+			read -p "Install ${yellow}paru$end? [n] " aur
+			echo
+			case "$aur" in
+				y | yes )
+					pacman -S git --noconfirm
+					cd /home/"$username"
+					sudo -u "$username" git clone https://aur.archlinux.org/paru-bin.git
+					cd paru-bin
+					sudo -u "$username" makepkg -si --noconfirm
+					cd ..
+					rm -rf paru-bin
+					break
+					;;
+				
+				n | no | "" ) echo "Skipping..."; break ;;
+			esac
+		done # while loop
 		;;
-	
-	n )
-		echo "Installing NetworkManager..."
-		pacman -S networkmanager --noconfirm || exit
-		echo ""
-		echo "${green}Enabling service...$end"
-		systemctl enable NetworkManager || exit
-		
-		break
-		;;
-	
-	s )
-		echo "Skipping..."
-		break
-		;;
-	
-	* ) invalidoption ;;
 esac
+
+echo
+
+while true; do
+	# network setup
+	autocomplete systemd-networkd networkmanager skip
+	read -ep "Configure ${yellow}systemd-network(d)$end, ${yellow}(n)etworkmanager$end, or (s)kip? [systemd-networkd] " network
+	echo
+	
+	case "$network" in
+		d | systemd-networkd | "" )
+			# takes the long `ip a` output and shortens it down to just the interfaces
+			# TODO: single multiline var?
+			ip -brief address | cut -d' ' -f1 | grep -v lo
+			interfaces="$(ip -brief address | cut -d' ' -f1 | grep -v lo)"
+			echo
+			
+			# hacky way to get autocomplete because interfaces aren't files
+			cd "$(mktemp -d)"
+			for inter in $(ip -brief address | cut -d' ' -f1 | grep -v lo); do touch "$inter"; done
+			
+			while true; do
+				read -ep "Select your ${yellow}interface$end: " interface
+				if [[ "$interfaces" != *"$interface"* ]] || [[ "$interface" == "" ]]; then
+					error "interface doesn't exist!"
+					echo
+				else break
+				fi
+			done # while loop
+			
+			echo
+	
+			# cat thing doesn't work for some reason
+			echo "${green}Writing configuration file...$end"
+			echo -e "[Match]\\nName=$interface\\n[Network]\\nDHCP=yes" >> /etc/systemd/network/wired-network.network
+			# heck ye, oneliners
+			
+			echo "${green}Enabling services...$end"
+			systemctl enable systemd-networkd systemd-resolved || exit
+			
+			break
+			;;
+		
+		n | networkmanager )
+			echo "${green}Installing NetworkManager...$end"
+			pacman -S networkmanager --noconfirm || exit
+			echo
+			echo "${green}Enabling service...$end"
+			systemctl enable NetworkManager || exit
+			
+			break
+			;;
+		
+		s | skip ) echo "Skipping..."; break ;;
+		* ) invalidoption ;;
+	esac
 done # while loop
 
-echo ""
+echo
 
-if [[ -z "$swapsize" ]]; then
-	while true; do
-		read -n 1 -rp "Use a ${blue}Swapfile$end? [n] " swap
-		echo ""
-		
-		case "$swap" in
-			y )
-				while true; do
-					read -rp "Swapfile size (in MiB) [1024]: " swapsize
-					case "$swapsize" in
-						# default to 1024
-						"" ) swapsize=1024; break ;;
-						*[!0-9]* )
-							echo "Value not a number!"
-							echo "" 
-							;;
-						* ) break ;;
-					esac
-					
-				done # while loop
-				swapstuff
-				break
-				;;	
-			
-			n | "" )
-				echo "Skipping..."
-				break
-				;;
-			
-			* ) invalidoption ;;
-		esac
-	done # while loop
-elif [[ "$swapsize" != n ]]; then swapstuff
-elif [[ "$swapsize" == n ]]; then :
-fi
-
-echo ""
-
-# enable DE services
-if [[ -n "$de" ]]; then
-	echo ""
-	echo "Enabling DE-specific service..."
-	systemctl enable "$dm" || exit
-fi
-
-clear
-
-echo "${green}Installing the CPU microcode...$end"
-echo ""
-if [[ -n "$removable" ]]; then
-	# install both because removable
-	pacman -S amd-ucode intel-ucode --noconfirm || exit
-else
-	while true; do
-	# read CPU vendor (for microcode)
-	read -n 1 -rp "${blue}Intel$end or ${red}AMD$end CPU? " cpu
-	echo ""
+while true; do
+	read -p "Use a ${blue}Swapfile$end? [n] " swap
+	echo
 	
+	case "$swap" in
+		y | yes )
+			while true; do
+			read -p "Swapfile size (in MiB) [1024]: " swapsize
+				case "$swapsize" in
+					"" ) 
+						# btrfs stuff
+						case "$filesystem" in
+							b | btrfs )
+								truncate -s 0 /swapfile || exit
+								chattr +C /swapfile || exit
+								btrfs property set /swapfile compression none || exit
+								;;
+						esac
+						
+						echo "${green}Making Swap...$end"
+						dd if=/dev/zero of=/swapfile bs=1M count="$swapsize" status=progress || exit
+						chmod 600 /swapfile
+						mkswap /swapfile
+						swapon /swapfile
+						echo "/swapfile none swap defaults 0 0" >> /etc/fstab
+						
+						break
+						;;
+					
+					*[!0-9]* )
+						echo "Value not a number!"
+						echo 
+						;;
+					* ) break ;;
+				esac
+				
+			done # while loop
+			swapstuff
+			break
+			;;	
+		
+		n | no | "" ) echo "Skipping..."; break ;;
+		* ) invalidoption ;;
+	esac
+done # while loop
+
+echo
+
+# microcode stuff
+echo "${green}Installing the CPU microcode...$end"
+while true; do
+	autocomplete amd intel skip
+	read -ep "${blue}Intel$end or ${red}AMD$end CPU? " cpu
+	echo
 	case "$cpu" in
-		a ) pacman -S amd-ucode --noconfirm || exit; break ;;
-		i ) pacman -S intel-ucode --noconfirm || exit; break ;;
+		a | amd ) pacman -S amd-ucode --noconfirm || exit; break ;;
+		i | intel ) pacman -S intel-ucode --noconfirm || exit; break ;;
+		skip ) echo "Skipping..."; break ;;
 		* )	invalidoption ;;
 	esac
 	
-	done # while loop
-fi
+done # while loop
 
-echo ""
+echo
 
 # bootloader
 echo "${green}Installing GRUB...$end"
-echo ""
-
+echo
 pacman -S grub --noconfirm || exit
-echo ""
+
+echo
 
 # extra stuff needed for LUKS
-if [[ -n "$luks" ]]; then
+if [[ "$luks" == true ]]; then
 	echo "${green}Doing LUKS stuff...$end"
 	
-	rootuuid="$(ls -l /dev/disk/by-uuid | grep $rootpartition | cut -d' ' -f9)"
+	rootuuid="$(lsblk -rno name,uuid | grep $oldrootpartition | cut -d' ' -f2)"
 	sed -i 's/#GRUB_ENABLE_CRYPTODISK/GRUB_ENABLE_CRYPTODISK/g' /etc/default/grub
 	sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=\"/GRUB_CMDLINE_LINUX_DEFAULT=\"cryptdevice=UUID=$rootuuid:cryptroot /g" /etc/default/grub
 
@@ -842,32 +661,22 @@ if [[ -n "$luks" ]]; then
 	sed -i 's/block/block encrypt /g' /etc/mkinitcpio.conf
 
 	mkinitcpio -P || exit
-	echo ""
+	echo
 fi
 
 # different installation methods based on the boot mode
 if [[ -n "$uefi" ]]; then
 	pacman -S efibootmgr --noconfirm || exit
-	echo ""
-	if [[ -n "$removable" ]]; then
-		grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB --removable --recheck || exit
-	else grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB || exit
-	fi
-else
-	if [[ -n "$removable" ]]; then
-		grub-install /dev/"$disk" --recheck || exit
-	else grub-install /dev/"$disk" || exit
-	fi
+	echo
+	grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB || exit
+else grub-install /dev/"$disk" || exit
 fi
 
-echo ""
+echo
 
-# make le grub config
 echo "${green}Writing GRUB configuration file...$end"
-echo ""
+echo
 grub-mkconfig -o /boot/grub/grub.cfg || exit
-
-exit
 
 EOF
 # END OF SCRIPT 2
@@ -878,32 +687,32 @@ chmod +x "$mountpoint"/archstall2
 
 # chroot in and run the second script
 echo "${green}Chrooting...$end"
-echo ""
+echo
 arch-chroot "$mountpoint" /archstall2 || exit
 
 clear
 
 # cleanup
-echo "Cleaning up files..."
-rm "$mountpoint"/archstall2 "$mountpoint"/varstuff packages packagesclean
+echo "${green}Cleaning up files...$end"
+rm "$mountpoint"/archstall2 "$mountpoint"/varstuff $packages $packagesclean
 
-echo ""
+echo
 
-#wait a bit because yes
+# wait a bit because yes
 sleep 1
 
 # unmount the filesystems
-echo "Unmounting filesystem/s..."
+echo "${green}Unmounting filesystem/s...$end"
 umount -R "$mountpoint"
 
 # luks stuff
-if [[ -n "$luks" ]]; then cryptsetup close /dev/"$encrootpartition"; fi
+if [[ "$luks" == true ]]; then cryptsetup close /dev/"$encrootpartition"; fi
 
-echo ""
+echo
 
-# reboot
+# end
 echo "${bold}${green}Installation finished!$end"
-read -n 1 -rsp "Press any key to reboot... "
-echo ""
+read -n 1 -sp "Press any key to reboot... "
+echo
 
 reboot
