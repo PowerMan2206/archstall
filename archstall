@@ -360,37 +360,28 @@ while true; do
 	grep -v "#" $packages > $packagesclean || exit
 	
 	echo
-
-	clear
-
+	
 	# ask if user wants to enable parallel download for pacman/pacstrap
 	while true; do
-		autocomplete y yes n no
-		read -ep "Enable ${yellow}Parallel Download$end for pacman? [n] " parallelDownload
-		case "$parallelDownload" in
-			y | yes )
-				# if yes, toggle ParallelDownloads in pacman.conf
-				sed -i 's/#ParallelDownloads/ParallelDownloads/g' /etc/pacman.conf ;
-				echo "Parallel Download has been enabled for pacman.";
-				break ;;
-			n | no | "" )
-				# if no, skip
-				echo "Skipping...";
-				break ;;
+		read -ep "Enable ${yellow}parallel downloads$end for pacman? [y] " paralleldownloads
+		case "$paralleldownloads" in
+			y | yes | "" )
+				sed -i 's/#ParallelDownloads/ParallelDownloads/g' /etc/pacman.conf
+				break
+				;;
+			n | no )
+				echo "Skipping..."
+				break
+				;;
 		esac
 	done # while loop
-
-	# update keyring and system before pacstrap
-	# this is to fix packages signing issues
-	echo "${green}Updating keyring and system...$end"
-	pacman --noconfirm -Sy archlinux-keyring && pacman --noconfirm -Su
 
 	clear
 
 	# read the package list and install those packages
 	echo "${green}Installing packages with pacstrap...$end"
 	echo
-	# using -P option to "Copy the host's pacman config to the target" (man page pacstrap(8))
+	# using -P in case parallel downloads are used
 	if ! pacstrap -P "$mountpoint" base base-devel - < $packagesclean; then
 		echo
 		echo "${red}Something went wrong!$end"
