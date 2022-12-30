@@ -361,10 +361,28 @@ while true; do
 	
 	echo
 	
+	# ask if user wants to enable parallel download for pacman/pacstrap
+	while true; do
+		read -ep "Enable ${yellow}parallel downloads$end for pacman? [y] " paralleldownloads
+		case "$paralleldownloads" in
+			y | yes | "" )
+				sed -i 's/#ParallelDownloads/ParallelDownloads/g' /etc/pacman.conf
+				break
+				;;
+			n | no )
+				echo "Skipping..."
+				break
+				;;
+		esac
+	done # while loop
+
+	clear
+
 	# read the package list and install those packages
 	echo "${green}Installing packages with pacstrap...$end"
 	echo
-	if ! pacstrap "$mountpoint" base base-devel - < $packagesclean; then
+	# using -P in case parallel downloads are used
+	if ! pacstrap -P "$mountpoint" base base-devel - < $packagesclean; then
 		echo
 		echo "${red}Something went wrong!$end"
 		echo "Read pacstrap message above"
