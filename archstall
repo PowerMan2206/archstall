@@ -362,7 +362,7 @@ while true; do
 	echo
 
 	clear
-	
+
 	# ask if user wants to enable parallel download for pacman/pacstrap
 	while true; do
 		autocomplete y yes n no
@@ -379,6 +379,13 @@ while true; do
 				break ;;
 		esac
 	done # while loop
+
+	# update keyring and system before pacstrap
+	# this is to fix packages signing issues
+	echo "${green}Updating keyring and system...$end"
+	pacman --noconfirm -Sy archlinux-keyring && pacman --noconfirm -Su
+
+	clear
 
 	# read the package list and install those packages
 	echo "${green}Installing packages with pacstrap...$end"
