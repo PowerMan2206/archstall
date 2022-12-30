@@ -299,7 +299,6 @@ case "$filesystem" in
 		;;	
 esac
 
-
 echo
 
 # mount partition/s
@@ -311,6 +310,12 @@ if [[ -n "$uefi" ]]; then
 fi
 
 clear
+
+echo "Updating the keyring..."
+# yeahyeah -Sy bad
+pacman --noconfirm -Sy archlinux-keyring || exit
+
+echo
 
 # create the package list
 packages=/tmp/packages
@@ -546,14 +551,13 @@ while true; do
 	case "$network" in
 		d | systemd-networkd | "" )
 			# takes the long `ip a` output and shortens it down to just the interfaces
-			# TODO: single multiline var?
 			ip -brief address | cut -d' ' -f1 | grep -v lo
 			interfaces="$(ip -brief address | cut -d' ' -f1 | grep -v lo)"
 			echo
 			
 			# hacky way to get autocomplete because interfaces aren't files
 			cd "$(mktemp -d)"
-			for inter in $(ip -brief address | cut -d' ' -f1 | grep -v lo); do touch "$inter"; done
+			for inter in "$interfaces"; do touch "$inter"; done
 			
 			while true; do
 				read -ep "Select your ${yellow}interface$end: " interface
