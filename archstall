@@ -11,6 +11,7 @@ italic=$(tput sitm)
 end=$(tput sgr0)
 
 mountpoint=/mnt
+stage2filename = archstall2
 
 #functions
 error() {
@@ -416,7 +417,7 @@ echo
 #----------------------------------------------------------------------------------------------------------------------
 #======================================================================================================================
 # START OF SCRIPT 2
-cat << 'EOF' > "$mountpoint"/archstall2
+cat << 'EOF' > "$mountpoint"/$stage2filename
 #!/bin/bash
 
 # set style variables
@@ -705,18 +706,18 @@ EOF
 #======================================================================================================================
 #----------------------------------------------------------------------------------------------------------------------
 
-chmod +x "$mountpoint"/archstall2
+chmod +x "$mountpoint"/$stage2filename
 
 # chroot in and run the second script
 echo "${green}Chrooting...$end"
 echo
-arch-chroot "$mountpoint" /archstall2 || exit
+arch-chroot "$mountpoint" /$stage2filename || exit
 
 clear
 
 # cleanup
 echo "${green}Cleaning up files...$end"
-rm "$mountpoint"/archstall2 "$mountpoint"/varstuff $packages $packagesclean
+rm "$mountpoint"/$stage2filename "$mountpoint"/varstuff $packages $packagesclean
 
 echo
 
