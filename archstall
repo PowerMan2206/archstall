@@ -10,7 +10,6 @@ bold=$(tput bold)
 italic=$(tput sitm)
 end=$(tput sgr0)
 
-originalDir=$(pwd)
 secondScriptName="archstall2"
 
 mountpoint=/mnt
