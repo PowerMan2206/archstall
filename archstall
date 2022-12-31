@@ -11,6 +11,8 @@ italic=$(tput sitm)
 end=$(tput sgr0)
 
 originalDir=$(pwd)
+secondScriptName="archstall2"
+
 mountpoint=/mnt
 
 #functions
@@ -410,21 +412,22 @@ genfstab -U "$mountpoint" > "$mountpoint"/etc/fstab || exit
 
 clear
 
-# fetch the second script into chroot and make it executable
+# fetch the second script from remote into chroot and make it executable
 while true; do
 
 	echo "${green}Fetching the second script...$end"
 	echo
 
-	# fetch the second script
-	if ! curl -fL https://raw.githubusercontent.com/WessellUrdata/archstart/for-pr/archstall2 > "$mountpoint"/archstall2 ; then
+	# fetch the second script from remote
+	if ! curl --connect-timeout 20 -fL https://raw.githubusercontent.com/WessellUrdata/archstart/for-pr/$secondScriptName > "$mountpoint"/$secondScriptName ; then
+	# if ! curl --connect-timeout 20 -fL https://raw.githubusercontent.com/PowerMan2206/archstall/master/$secondScriptName > "$mountpoint"/$secondScriptName ; then
 		echo "${red}Something went wrong!$end"
 		echo "Read the error message above"
 		read -n 1 -sp "Press any key to retry... "
 		clear
 	else
 		# make executable
-		chmod +x "$mountpoint"/archstall2 
+		chmod +x "$mountpoint"/$secondScriptName
 		break
 	fi
 	
@@ -433,13 +436,13 @@ done # while loop
 # chroot in and run the second script
 echo "${green}Chrooting...$end"
 echo
-arch-chroot $mountpoint ./archstall2 || exit
+arch-chroot $mountpoint ./$secondScriptName || exit
 
 clear
 
 # cleanup
 echo "${green}Cleaning up files...$end"
-rm "$mountpoint"/archstall2 "$mountpoint"/varstuff $packages $packagesclean
+rm "$mountpoint"/$secondScriptName "$mountpoint"/varstuff $packages $packagesclean
 
 echo
 
