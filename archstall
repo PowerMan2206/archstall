@@ -10,6 +10,9 @@ bold=$(tput bold)
 italic=$(tput sitm)
 end=$(tput sgr0)
 
+originalDir=$(pwd)
+secondScriptName="archstall2"
+
 mountpoint=/mnt
 
 #functions
@@ -416,7 +419,7 @@ echo
 #----------------------------------------------------------------------------------------------------------------------
 #======================================================================================================================
 # START OF SCRIPT 2
-cat << 'EOF' > "$mountpoint"/archstall2
+cat << 'EOF' > "$mountpoint"/$secondScriptName
 #!/bin/bash
 
 # set style variables
@@ -705,18 +708,18 @@ EOF
 #======================================================================================================================
 #----------------------------------------------------------------------------------------------------------------------
 
-chmod +x "$mountpoint"/archstall2
+chmod +x "$mountpoint"/$secondScriptName
 
 # chroot in and run the second script
 echo "${green}Chrooting...$end"
 echo
-arch-chroot "$mountpoint" /archstall2 || exit
+arch-chroot $mountpoint ./$secondScriptName || exit
 
 clear
 
 # cleanup
 echo "${green}Cleaning up files...$end"
-rm "$mountpoint"/archstall2 "$mountpoint"/varstuff $packages $packagesclean
+rm "$mountpoint"/$secondScriptName "$mountpoint"/varstuff $packages $packagesclean
 
 echo
 
