@@ -11,6 +11,8 @@ italic=$(tput sitm)
 end=$(tput sgr0)
 
 mountpoint=/mnt
+packages=/tmp/packages
+packagesclean=/tmp/packagesclean
 
 #functions
 error() {
@@ -38,11 +40,6 @@ echo "${red}This script comes with no warranty, screwing up your system is your 
 echo
 read -n 1 -sp "Press any key to continue... "
 echo; echo
-
-# delet packages file if it already exists
-# (little dev stuff)
-# ((yes it already gets nuked at the end but shush))
-if [[ -f packages ]]; then rm packages; fi
 
 # check the boot mode
 if [[ -d /sys/firmware/efi/efivars ]]; then
@@ -215,7 +212,7 @@ while true; do
 								n | no | "" ) echo "${green}Skipping EFI partition formatting...$end"; break ;;
 								y | yes )
 									echo "${green}Formatting the EFI partition...$end"
-									mkfs.fat -F32 "$efipartition"
+									mkfs.fat -F32 "$efipartition" || exit
 									break
 									;;
 							esac
@@ -272,6 +269,7 @@ clear
 while true; do
 	autocomplete ext4 f2fs xfs btrfs
 	echo
+	echo "${red}${bold}WARNING: THIS WILL FORMAT THE PARTITION AND ERASE EVERYTHING ON IT$end (duh)"
 	read -ep "Select the ${bold}root filesystem$end: (e)xt4, (f)2fs, (x)fs, (b)trfs [ext4] " filesystem
 	case "$filesystem" in
 		e | ext4 | "" | f | f2fs | b | btrfs | x | xfs ) break ;;
@@ -287,15 +285,15 @@ case "$filesystem" in
 		;;
 	f | f2fs ) 
 		mkfs.f2fs -f /dev/"$rootpartition" || exit 
-		echo "f2fs-tools" >> packages
+		echo "f2fs-tools" >> $packages
 		;;
 	b | btrfs )
 		mkfs.btrfs -f /dev/"$rootpartition" || exit
-		echo "btrfs-progs" >> packages
+		echo "btrfs-progs" >> $packages
 		;;
 	x | xfs )
 		mkfs.xfs -f /dev/"$rootpartition" || exit
-		echo "xfsprogs" >> packages
+		echo "xfsprogs" >> $packages
 		;;	
 esac
 
@@ -318,10 +316,8 @@ pacman --noconfirm -Sy archlinux-keyring || exit
 echo
 
 # create the package list
-packages=/tmp/packages
-packagesclean=/tmp/packagesclean
 echo "${green}Writing the package list...$end"
-cat << 'EOF' > $packages
+cat << 'EOF' >> $packages
 linux
 #linux-lts
 linux-firmware
@@ -366,7 +362,7 @@ while true; do
 	
 	echo
 	
-	# ask if user wants to enable parallel download for pacman/pacstrap
+	# ask if user wants to enable parallel downloads for pacman/pacstrap
 	while true; do
 		read -ep "Enable ${yellow}parallel downloads$end for pacman? [y] " paralleldownloads
 		case "$paralleldownloads" in
