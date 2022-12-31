@@ -420,7 +420,7 @@ while true; do
 
 	# fetch the second script from remote
 	if ! curl --connect-timeout 20 -fL https://raw.githubusercontent.com/WessellUrdata/archstart/for-pr/$secondScriptName > "$mountpoint"/$secondScriptName ; then
-	# if ! curl --connect-timeout 20 -fL https://raw.githubusercontent.com/PowerMan2206/archstall/master/$secondScriptName > "$mountpoint"/$secondScriptName ; then
+	# if ! curl --connect-timeout 20 -fL https://git.io/JtoeR -o $secondScriptName > "$mountpoint"/$secondScriptName ; then
 		echo "${red}Something went wrong!$end"
 		echo "Read the error message above"
 		read -n 1 -sp "Press any key to retry... "
