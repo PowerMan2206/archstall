@@ -10,6 +10,7 @@ bold=$(tput bold)
 italic=$(tput sitm)
 end=$(tput sgr0)
 
+originalDir=$(pwd)
 mountpoint=/mnt
 
 #functions
@@ -409,308 +410,30 @@ genfstab -U "$mountpoint" > "$mountpoint"/etc/fstab || exit
 
 clear
 
-# write the second script
-echo "${green}Writing the second script...$end"
-echo
-
-#----------------------------------------------------------------------------------------------------------------------
-#======================================================================================================================
-# START OF SCRIPT 2
-cat << 'EOF' > "$mountpoint"/archstall2
-#!/bin/bash
-
-# set style variables
-red=$(tput setaf 1)
-green=$(tput setaf 2)
-yellow=$(tput setaf 3)
-blue=$(tput setaf 4)
-bold=$(tput bold)
-end=$(tput sgr0)
-
-# source the variables
-source /varstuff
-
-# functions
-error() {
-	echo "${bold}${red}ERROR:$end $1"
-}
-
-invalidoption() {
-	error "invalid option!"
-}
-
-autocomplete() {
-	cd $(mktemp -d)
-	touch $@
-}
-
-# select timezone stuff
-cd /usr/share/zoneinfo; ls
-echo
-
+# fetch the second script into chroot and make it executable
 while true; do
-	read -ep "Select your ${yellow}region$end: " timezone
 
-	if [[ "$timezone" == "" ]] || [[ -d "$timezone" ]]; then invalidoption
-	elif [[ -f /usr/share/zoneinfo/"$timezone" ]]; then
-		echo
-		echo "${green}Setting the ${bold}timezone$end${green}...$end"
-		ln -sf /usr/share/zoneinfo/"$timezone" /etc/localtime
+	echo "${green}Fetching the second script...$end"
+	echo
+
+	# fetch the second script
+	if ! curl -fL https://raw.githubusercontent.com/WessellUrdata/archstart/for-pr/archstall2 > "$mountpoint"/archstall2 ; then
+		echo "${red}Something went wrong!$end"
+		echo "Read the error message above"
+		read -n 1 -sp "Press any key to retry... "
+		clear
+	else
+		# make executable
+		chmod +x "$mountpoint"/archstall2 
 		break
-	else invalidoption
 	fi
-done # while loop
-
-echo
-
-# somethingsomething time
-echo "${green}Generating ${bold}/etc/adjtime$end${green}...$end"
-hwclock --systohc || exit
-
-echo
-
-# locale stuff (???)
-echo "${green}Setting the ${bold}locale$end${green}...$end"
-sed -i 's/#en_US.UTF-8 UTF-8/en_US.UTF-8 UTF-8/g' /etc/locale.gen
-locale-gen || exit
-echo "LANG=en_US.UTF-8" > /etc/locale.conf
-
-clear
-
-read -p "${yellow}hostname$end [localhost] : " hostname
-echo "${green}Setting the$end ${yellow}hostname$end${green}...$end"
-case "$hostname" in
-	"" ) echo localhost > /etc/hostname ;;
-	* ) echo "$hostname" > /etc/hostname ;;
-esac
-
-echo
-
-# for some reason I really like this piece of code
-# it's just so short and great, works perfectly
-# I just think it's neat
-echo "${red}Setting the root password...$end"
-while true; do
-	if ! passwd; then echo
-	else break
-	fi
-done # while loop
-
-echo
-
-read -rp "${yellow}username$end: (empty for no user) " username
-username="${username,,}"
-case "$username" in
-	"" ) echo "Skipping..." ;;
-	* ) 
-		echo "${green}Adding user$end ${yellow}$username$end"
-		useradd -m "$username" || exit
-		
-		echo "${green}Setting the$end ${yellow}user$end ${green}password...$end"
-		while true; do
-			if ! passwd "$username"; then echo
-			else break
-			fi
-		done # while loop
-		
-		# sudo stuff
-		groupadd sudo
-		gpasswd -a "$username" sudo
-		sed -i 's/# %sudo/%sudo/g' /etc/sudoers
-		
-		while true; do
-			# AUR helper
-			read -p "Install ${yellow}paru$end? [n] " aur
-			echo
-			case "$aur" in
-				y | yes )
-					pacman -S git --noconfirm
-					cd /home/"$username"
-					sudo -u "$username" git clone https://aur.archlinux.org/paru-bin.git
-					cd paru-bin
-					sudo -u "$username" makepkg -si --noconfirm
-					cd ..
-					rm -rf paru-bin
-					break
-					;;
-				
-				n | no | "" ) echo "Skipping..."; break ;;
-			esac
-		done # while loop
-		;;
-esac
-
-echo
-
-while true; do
-	# network setup
-	autocomplete systemd-networkd networkmanager skip
-	read -ep "Configure ${yellow}systemd-network(d)$end, ${yellow}(n)etworkmanager$end, or (s)kip? [systemd-networkd] " network
-	echo
-	
-	case "$network" in
-		d | systemd-networkd | "" )
-			# takes the long `ip a` output and shortens it down to just the interfaces
-			ip -brief address | cut -d' ' -f1 | grep -v lo
-			interfaces="$(ip -brief address | cut -d' ' -f1 | grep -v lo)"
-			echo
-			
-			# hacky way to get autocomplete because interfaces aren't files
-			cd "$(mktemp -d)"
-			for inter in "$interfaces"; do touch "$inter"; done
-			
-			while true; do
-				read -ep "Select your ${yellow}interface$end: " interface
-				if [[ "$interfaces" != *"$interface"* ]] || [[ "$interface" == "" ]]; then
-					error "interface doesn't exist!"
-					echo
-				else break
-				fi
-			done # while loop
-			
-			echo
-	
-			# cat thing doesn't work for some reason
-			echo "${green}Writing configuration file...$end"
-			echo -e "[Match]\\nName=$interface\\n[Network]\\nDHCP=yes" >> /etc/systemd/network/wired-network.network
-			# heck ye, oneliners
-			
-			echo "${green}Enabling services...$end"
-			systemctl enable systemd-networkd systemd-resolved || exit
-			
-			break
-			;;
-		
-		n | networkmanager )
-			echo "${green}Installing NetworkManager...$end"
-			pacman -S networkmanager --noconfirm || exit
-			echo
-			echo "${green}Enabling service...$end"
-			systemctl enable NetworkManager || exit
-			
-			break
-			;;
-		
-		s | skip ) echo "Skipping..."; break ;;
-		* ) invalidoption ;;
-	esac
-done # while loop
-
-echo
-
-while true; do
-	read -p "Use a ${blue}Swapfile$end? [n] " swap
-	echo
-	
-	case "$swap" in
-		y | yes )
-			while true; do
-			read -p "Swapfile size (in MiB) [1024]: " swapsize
-				case "$swapsize" in
-					"" ) 
-						# btrfs stuff
-						case "$filesystem" in
-							b | btrfs )
-								truncate -s 0 /swapfile || exit
-								chattr +C /swapfile || exit
-								btrfs property set /swapfile compression none || exit
-								;;
-						esac
-						
-						echo "${green}Making Swap...$end"
-						dd if=/dev/zero of=/swapfile bs=1M count="$swapsize" status=progress || exit
-						chmod 600 /swapfile
-						mkswap /swapfile
-						swapon /swapfile
-						echo "/swapfile none swap defaults 0 0" >> /etc/fstab
-						
-						break
-						;;
-					
-					*[!0-9]* )
-						echo "Value not a number!"
-						echo 
-						;;
-					* ) break ;;
-				esac
-				
-			done # while loop
-			swapstuff
-			break
-			;;	
-		
-		n | no | "" ) echo "Skipping..."; break ;;
-		* ) invalidoption ;;
-	esac
-done # while loop
-
-echo
-
-# microcode stuff
-echo "${green}Installing the CPU microcode...$end"
-while true; do
-	autocomplete amd intel skip
-	read -ep "${blue}Intel$end or ${red}AMD$end CPU? " cpu
-	echo
-	case "$cpu" in
-		a | amd ) pacman -S amd-ucode --noconfirm || exit; break ;;
-		i | intel ) pacman -S intel-ucode --noconfirm || exit; break ;;
-		skip ) echo "Skipping..."; break ;;
-		* )	invalidoption ;;
-	esac
 	
 done # while loop
-
-echo
-
-# bootloader
-echo "${green}Installing GRUB...$end"
-echo
-pacman -S grub --noconfirm || exit
-
-echo
-
-# extra stuff needed for LUKS
-if [[ "$luks" == true ]]; then
-	echo "${green}Doing LUKS stuff...$end"
-	
-	rootuuid="$(lsblk -rno name,uuid | grep $oldrootpartition | cut -d' ' -f2)"
-	sed -i 's/#GRUB_ENABLE_CRYPTODISK/GRUB_ENABLE_CRYPTODISK/g' /etc/default/grub
-	sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=\"/GRUB_CMDLINE_LINUX_DEFAULT=\"cryptdevice=UUID=$rootuuid:cryptroot /g" /etc/default/grub
-
-	# also does it on the comment but ehh
-	sed -i 's/autodetect/autodetect keyboard keymap /g' /etc/mkinitcpio.conf
-	sed -i 's/block/block encrypt /g' /etc/mkinitcpio.conf
-
-	mkinitcpio -P || exit
-	echo
-fi
-
-# different installation methods based on the boot mode
-if [[ -n "$uefi" ]]; then
-	pacman -S efibootmgr --noconfirm || exit
-	echo
-	grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB || exit
-else grub-install /dev/"$disk" || exit
-fi
-
-echo
-
-echo "${green}Writing GRUB configuration file...$end"
-echo
-grub-mkconfig -o /boot/grub/grub.cfg || exit
-
-EOF
-# END OF SCRIPT 2
-#======================================================================================================================
-#----------------------------------------------------------------------------------------------------------------------
-
-chmod +x "$mountpoint"/archstall2
 
 # chroot in and run the second script
 echo "${green}Chrooting...$end"
 echo
-arch-chroot "$mountpoint" /archstall2 || exit
+arch-chroot $mountpoint ./archstall2 || exit
 
 clear
 
