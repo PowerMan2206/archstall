@@ -35,7 +35,9 @@ autocomplete() {
 clear 
 
 echo "${bold}${green}Archstall Arch Linux installer$end"
-echo "${red}This script comes with no warranty, screwing up your system is your fault$end"
+echo "${red}This script comes with no warranty, your system is your own responsibility$end"
+echo "Using the latest Arch Linux live environment is recommended"
+echo "https://github.com/PowerMan2206/archstall"
 
 echo
 read -n 1 -sp "Press any key to continue... "
@@ -54,10 +56,6 @@ fi
 echo
 read -n 1 -sp "Press any key to continue or Ctrl+C to cancel..."
 echo; echo
-
-# set the system clock and wait a bit for the messages
-echo "Ensuring the system clock is accurate..."
-timedatectl set-ntp true || exit; sleep 1
 
 clear
 
@@ -79,8 +77,7 @@ while true; do
 	if   [[ "$(lsblk -dno name)" != *"$disk"* ]] || [[ "$disk" == "" ]]; then 
 		error "disk doesn't exist!"
 		echo
-	elif [[ "$(lsblk -dno name)" == *"$disk"* ]]; then 
-		break
+	elif [[ "$(lsblk -dno name)" == *"$disk"* ]]; then break
 	fi
 done
 
@@ -153,7 +150,6 @@ while true; do
 		m | manual | s | skip )
 			case $partitioning in
 				m | manual )
-					
 					autocomplete fdisk cfdisk parted
 					
 					while true; do
@@ -178,7 +174,7 @@ while true; do
 			# this again
 			cd /dev
 			
-			partitions="$(lsblk -rno name,size | grep "$disk" | sed 1d)"
+			partitions="$(lsblk -rno name,size | grep $disk | sed 1d)"
 			echo "$partitions"
 			echo
 			
@@ -206,7 +202,7 @@ while true; do
 						while true; do
 							echo
 							echo "Do you want to format the ${bold}EFI partition?$end"
-							read -p "Don't do this if you set it up beforehand [n] " formatefi
+							read -p "${red}Don't do this if you set it up beforehand$end [n] " formatefi
 							
 							case $formatefi in
 								n | no | "" ) echo "${green}Skipping EFI partition formatting...$end"; break ;;
@@ -269,7 +265,9 @@ clear
 while true; do
 	autocomplete ext4 f2fs xfs btrfs
 	echo
-	echo "${red}${bold}WARNING: THIS WILL FORMAT THE PARTITION AND ERASE EVERYTHING ON IT$end (duh)"
+	case $partitioning in
+		m | manual | s | skip ) echo "${red}${bold}WARNING: THIS WILL FORMAT THE PARTITION AND ERASE EVERYTHING ON IT$end (duh)" ;;
+	esac
 	read -ep "Select the ${bold}root filesystem$end: (e)xt4, (f)2fs, (x)fs, (b)trfs [ext4] " filesystem
 	case "$filesystem" in
 		e | ext4 | "" | f | f2fs | b | btrfs | x | xfs ) break ;;
@@ -280,7 +278,7 @@ done # while loop
 echo "${green}Formatting the ${bold}root partition$end ${green}...$end"
 echo
 case "$filesystem" in
-	e | "" | ext4 ) 
+	e | ext4 | "" ) 
 		mkfs.ext4 -F /dev/"$rootpartition" || exit 
 		;;
 	f | f2fs ) 
