@@ -55,7 +55,6 @@ fi
 
 echo
 read -n 1 -sp "Press any key to continue or Ctrl+C to cancel..."
-echo; echo
 
 clear
 
