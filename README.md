@@ -3,6 +3,8 @@ Simple Arch Linux installer.
 
 *10/10 best Arch installer ever* - Linus Torvalds maybe
 
+*i give archstall a 21 out of 20, very slick!* - Frog guy
+
 *what is archstall and why are you in my house* - Judd Vinet perhaps 
 
 *Now it's even harder, better, faster, and stronger!* - me
