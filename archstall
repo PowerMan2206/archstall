@@ -36,14 +36,15 @@ clear
 
 echo "${bold}${green}Archstall Arch Linux installer$end"
 echo "${red}This script comes with no warranty, your system is your own responsibility$end"
-echo "Using the latest Arch Linux live environment is recommended"
 echo "https://github.com/PowerMan2206/archstall"
+echo
 
-if ! grep -Fq "IMAGE_ID=archlinux" /etc/os-release; then
-    	echo
-	echo "${red}Non Arch Linux live environment detected."
-	echo "Please run this script in an Arch Linux live environment.$end"
-	exit
+if ! grep -q "IMAGE_ID=archlinux" /etc/os-release; then
+	echo "${red}Non-Arch Linux live environment detected!$end"
+	echo "The script may still work, but an Arch Linux live environment is ${bold}strongly$end"
+	echo "recommended since it has all the required packages already installed"
+else
+	echo "Using the latest Arch Linux live environment is recommended"
 fi
 
 echo
