@@ -507,9 +507,8 @@ case "$username" in
 		done # while loop
 		
 		# sudo stuff
-		groupadd sudo
-		gpasswd -a "$username" sudo
-		sed -i 's/# %sudo/%sudo/g' /etc/sudoers
+		gpasswd -a "$username" wheel
+		sed -i 's/# %wheel ALL=(ALL:ALL) ALL/%wheel ALL=(ALL:ALL) ALL/g' /etc/sudoers
 		
 		while true; do
 			# AUR helper
