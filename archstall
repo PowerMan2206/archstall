@@ -233,7 +233,9 @@ echo
 
 # some luks stuff
 while true; do
-	read -p "Use LUKS1 encryption on the root partition? [n] " luks
+	echo "Use LUKS1 encryption on the root partition?"
+	echo "${bold}NOTE$end: this is a very basic implementation, things such"
+	read -p "as an unencrypted /boot partition are ${bold}not supported$end [n] " luks
 	echo
 	case "$luks" in
 		y | yes )
