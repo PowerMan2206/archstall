@@ -38,6 +38,9 @@ echo "${bold}${green}Archstall Arch Linux installer$end"
 echo "${red}This script comes with no warranty, your system is your own responsibility$end"
 echo "https://github.com/PowerMan2206/archstall"
 echo
+echo "The script is made to help you install Arch Linux,"
+echo "not make the process idiot-proof. Don't be an idiot."
+echo
 
 if ! grep -q "IMAGE_ID=archlinux" /etc/os-release; then
 	echo "${red}Non-Arch Linux live environment detected!$end"
@@ -52,21 +55,20 @@ read -n 1 -sp "Press any key to continue... "
 echo; echo
 
 # check the boot mode
-if [[ -d /sys/firmware/efi/efivars ]]; then
-	echo "System booted in ${bold}UEFI$end mode"
-	uefi=true
-else
-	# notify user is booted in BIOS
-	echo "System booted in ${bold}BIOS$end mode"
-	echo "Reboot into ${bold}UEFI$end mode if you want to install for that."
+if [[ ! -f /sys/firmware/efi/fw_platform_size ]]; then
+	echo "${red}System booted in ${bold}BIOS$end$red mode!$end"
+	echo "The script does not support installing in BIOS mode"
+	echo "boo-womp for you"
+	exit
+elif [[ $(cat /sys/firmware/efi/fw_platform_size) != 64 ]]; then
+	echo "${red}System not booted in ${bold}64-bit UEFI$end$red mode!$end"
+	echo "This causes problems within the script and- 32-bit UEFI, man? Really?"
+	exit
 fi
-
-echo
-read -n 1 -sp "Press any key to continue or Ctrl+C to cancel..."
 
 clear
 
-# unmount any thing in the mountpoint
+# unmount anything in the mountpoint
 if [[ $(findmnt "$mountpoint") ]]; then
 	echo "Unmounting disks in $mountpoint..."
 	umount -R "$mountpoint" || exit
@@ -81,7 +83,7 @@ lsblk -dno name,size
 echo
 while true; do
 	read -ep "Select the ${yellow}disk$end you want to use: /dev/" disk
-	if   [[ "$(lsblk -dno name)" != *"$disk"* ]] || [[ "$disk" == "" ]]; then 
+	if [[ "$(lsblk -dno name)" != *"$disk"* ]] || [[ "$disk" == "" ]]; then 
 		error "disk doesn't exist!"
 		echo
 	elif [[ "$(lsblk -dno name)" == *"$disk"* ]]; then break
@@ -96,19 +98,14 @@ while true; do
 	
 	case $partitioning in
 		a | automatic | "" )
-			if [[ -n "$uefi" ]]; then
-				echo "The disk will be partitioned into a 512M ${bold}EFI partition$end and a ${bold}root partition$end that takes up the rest"
-			else
-				echo "The disk will be partitioned into a single ${bold}root partition$end taking up the entire disk"
-			fi
-			
+			echo "The disk will be partitioned into a 512M ${bold}EFI partition$end and a ${bold}root partition$end that takes up the rest"
 			echo
 			echo "${bold}${red}WARNING: THIS WILL ERASE EVERYTHING ON THE SELECTED DISK$end"
-			read -sp "${red}Are you sure you want to continue?$end You can cancel with Ctrl+C"
+			read -sp "${red}Are you SURE you want to continue?$end You can cancel with Ctrl+C"
 			echo
 			echo -n "${red}Erasing disk in "
 			
-			# hell yeah, complications
+			# shit works
 			for delet in {5..1}; do
 				echo -n $delet
 				for dot in {1..3}; do
@@ -121,36 +118,23 @@ while true; do
 			echo "$end"
 			
 			echo
+			parted -s /dev/"$disk" mklabel gpt || exit
 			
-			if [[ -n "$uefi" ]]; then
-				parted -s /dev/"$disk" mklabel gpt || exit
-				
-				# make EFI partition
-				echo "${green}Making the ${bold}EFI partition...$end"
-				parted -s /dev/"$disk" mkpart P1 1MiB 512MiB || exit
-				efipartition="$(namepartition 1)"
-				
-				# format EFI partition
-				echo "${green}Formatting the EFI partition...$end"
-				mkfs.fat -F32 /dev/"$efipartition"
-
-				echo
-				
-				# make root partition
-				echo "${green}Making the ${bold}root partition...$end"
-				parted -s /dev/"$disk" mkpart P2 512MiB 100% || exit
-				rootpartition="$(namepartition 2)"
+			# make EFI partition
+			echo "${green}Making the ${bold}EFI partition...$end"
+			parted -s /dev/"$disk" mkpart P1 1MiB 512MiB || exit
+			efipartition="$(namepartition 1)"
 			
-			else
-				parted -s /dev/"$disk" mklabel msdos || exit
-				
-				# make root partition
-				echo "${green}Making the ${bold}root partition...$end"
-				parted -s /dev/"$disk" mkpart primary 1MiB 100% || exit
-				parted -s /dev/"$disk" set 1 boot on || exit
-				rootpartition="$(namepartition 1)"
-			fi
+			# format EFI partition
+			echo "${green}Formatting the EFI partition...$end"
+			mkfs.fat -F32 /dev/"$efipartition"
+			echo
 			
+			# make root partition
+			echo "${green}Making the ${bold}root partition...$end"
+			parted -s /dev/"$disk" mkpart P2 512MiB 100% || exit
+			rootpartition="$(namepartition 2)"
+	
 			break
 			;;
 		
@@ -194,125 +178,60 @@ while true; do
 				fi
 			done # while loop
 			
-			if [[ -n "$uefi" ]]; then
-				echo
-				efipartitions="$(lsblk -rno name,size | grep "$disk" | sed 1d | grep -v "$rootpartition")"
-				echo "$efipartitions"
-				echo
-				
-				while true; do
-					read -ep "What's the ${bold}EFI partition${end}? /dev/" efipartition
-					if [[ "$efipartitions" != *"$efipartition"* ]] || [[ "$efipartition" == "" ]] || [[ "$efipartition" == "$disk" ]]; then
-						error "partition doesn't exist!"
+			echo
+			efipartitions="$(lsblk -rno name,size | grep $disk | sed 1d | grep -v "$rootpartition")"
+			echo "$efipartitions"
+			echo
+			
+			while true; do
+				read -ep "What's the ${bold}EFI partition${end}? /dev/" efipartition
+				if [[ "$efipartitions" != *"$efipartition"* ]] || [[ "$efipartition" == "" ]] || [[ "$efipartition" == "$disk" ]]; then
+					error "partition doesn't exist!"
+					echo
+				else
+					while true; do
 						echo
-					else
-						while true; do
-							echo
-							echo "Do you want to format the ${bold}EFI partition?$end"
-							read -p "${red}Don't do this if you set it up beforehand$end [n] " formatefi
-							
-							case $formatefi in
-								n | no | "" ) echo "${green}Skipping EFI partition formatting...$end"; break ;;
-								y | yes )
-									echo "${green}Formatting the EFI partition...$end"
-									mkfs.fat -F32 "$efipartition" || exit
-									break
-									;;
-							esac
-						done # while loop		# this
-						break					# is
-					fi							# a
-				done # while loop				# beautiful
-			fi									# mess
-			break								# lmao
+						echo "Do you want to format the ${bold}EFI partition?$end"
+						read -p "${red}Don't do this if you set it up beforehand$end [n] " formatefi
+						
+						case $formatefi in
+							n | no | "" ) echo "${green}Skipping EFI partition formatting...$end"; break ;;
+							y | yes )
+								echo "${green}Formatting the EFI partition...$end"
+								mkfs.fat -F32 "$efipartition" || exit
+								break
+								;;
+						esac
+					done # while loop		# this
+					break					# is
+				fi							# a
+			done # while loop				# beautiful
+			break							# mess
 			;;
 	esac
 done
 
 echo
 
-# some luks stuff
-while true; do
-	echo "Use LUKS1 encryption on the root partition?"
-	echo "${bold}NOTE$end: this is a very basic implementation, things such"
-	read -p "as an unencrypted /boot partition are ${bold}not supported$end [n] " luks
-	echo
-	case "$luks" in
-		y | yes )
-			echo "${green}Encrypting /dev/$rootpartition...$end"
-			while true; do
-				if ! cryptsetup -y -q --type luks1 luksFormat /dev/"$rootpartition"; then echo
-				else break
-				fi
-			done # while loop
-			
-			echo
-			
-			echo "${green}Opening /dev/$rootpartition...$end"
-			while true; do
-				if ! cryptsetup open /dev/"$rootpartition" cryptroot; then echo
-				else break
-				fi
-			done # while loop
-			
-			# var stuff
-			encrootpartition="mapper/cryptroot"
-			oldrootpartition="$rootpartition"
-			rootpartition="$encrootpartition"
-			luks=true
-			
-			echo
-			break
-			;;
-		n  | no | "" ) echo "Skipping..."; break ;;
-	esac
-done # while loop
-
 clear
-
-# TODO: clean up entire filesystem thing maybe
-while true; do
-	autocomplete ext4 f2fs xfs btrfs
-	echo
-	case $partitioning in
-		m | manual | s | skip ) echo "${red}${bold}WARNING: THIS WILL FORMAT THE PARTITION AND ERASE EVERYTHING ON IT$end (duh)" ;;
-	esac
-	read -ep "Select the ${bold}root filesystem$end: (e)xt4, (f)2fs, (x)fs, (b)trfs [ext4] " filesystem
-	case "$filesystem" in
-		e | ext4 | "" | f | f2fs | b | btrfs | x | xfs ) break ;;
-		* ) invalidoption ;;
-	esac
-done # while loop
 
 echo "${green}Formatting the ${bold}root partition$end ${green}...$end"
 echo
-case "$filesystem" in
-	e | ext4 | "" ) 
-		mkfs.ext4 -F /dev/"$rootpartition" || exit 
+case $partitioning in
+	m | manual | s | skip )
+		echo "${red}${bold}WARNING: THIS WILL ERASE EVERYTHING ON THE ROOT PARTITION$end (duh)"
+		read -p "Press enter to continue..."
 		;;
-	f | f2fs ) 
-		mkfs.f2fs -f /dev/"$rootpartition" || exit 
-		echo "f2fs-tools" >> $packages
-		;;
-	b | btrfs )
-		mkfs.btrfs -f /dev/"$rootpartition" || exit
-		echo "btrfs-progs" >> $packages
-		;;
-	x | xfs )
-		mkfs.xfs -f /dev/"$rootpartition" || exit
-		echo "xfsprogs" >> $packages
-		;;	
 esac
+mkfs.ext4 -F /dev/"$rootpartition" || exit
 
 echo
 
-# mount partition/s
+# mount partition
 echo "${green}Mounting the partitions...$end"
-mount /dev/"$rootpartition" "$mountpoint"
-if [[ -n "$uefi" ]]; then
-	mkdir "$mountpoint"/efi || exit
-	mount /dev/"$efipartition" "$mountpoint"/efi || exit
-fi
+mount /dev/"$rootpartition" "$mountpoint" || exit
+mkdir "$mountpoint"/efi || exit
+mount /dev/"$efipartition" "$mountpoint"/efi || exit
 
 clear
 
@@ -343,9 +262,9 @@ echo
 
 while true; do
 	# edit package list
-	echo "Add/uncomment packages which you want in the package list"
+	echo "Add/uncomment packages which you want to install in the package list"
 	echo "${yellow}Linux, the firmware, polkit, nano, and neofetch are installed by default$end"
-	echo "(also base and base-devel but you can't remove those because the installer ${red}dies$end)"
+	echo "(also base and base-devel but you can't remove those because the installer breaks)"
 	echo
 	
 	while true; do
@@ -364,7 +283,7 @@ while true; do
 	echo
 	
 	# take the packages list and get rid of the comments
-	echo "Cleaning up the package list..."
+	echo "Cleaning the package list of comments..."
 	grep -v "#" $packages > $packagesclean || exit
 	
 	echo
@@ -401,8 +320,7 @@ while true; do
 	fi
 done # while loop
 
-# TODO: clean this up as well
-declare -p uefi disk filesystem luks oldrootpartition rootpartition > "$mountpoint"/varstuff 2> /dev/null
+declare -p disk rootpartition > "$mountpoint"/varstuff 2> /dev/null
 
 echo
 
@@ -430,7 +348,7 @@ blue=$(tput setaf 4)
 bold=$(tput bold)
 end=$(tput sgr0)
 
-# source the variables
+# source the variables from the previous script
 source /varstuff
 
 # functions
@@ -497,7 +415,7 @@ while true; do
 	if ! passwd; then echo
 	else break
 	fi
-done # while loop
+done
 
 echo
 
@@ -514,7 +432,7 @@ case "$username" in
 			if ! passwd "$username"; then echo
 			else break
 			fi
-		done # while loop
+		done
 		
 		# sudo stuff
 		gpasswd -a "$username" wheel
@@ -538,7 +456,7 @@ case "$username" in
 				
 				n | no | "" ) echo "Skipping..."; break ;;
 			esac
-		done # while loop
+		done
 		;;
 esac
 
@@ -553,11 +471,11 @@ while true; do
 	case "$network" in
 		d | systemd-networkd | "" )
 			# takes the long `ip a` output and shortens it down to just the interfaces
-			ip -brief address | cut -d' ' -f1 | grep -v lo
 			interfaces="$(ip -brief address | cut -d' ' -f1 | grep -v lo)"
+			echo "$interfaces"
 			echo
 			
-			# hacky way to get autocomplete because interfaces aren't files
+			# hacky way to get autocomplete because interfaces aren't files somehow
 			cd "$(mktemp -d)"
 			for inter in "$interfaces"; do touch "$inter"; done
 			
@@ -575,7 +493,6 @@ while true; do
 			# cat thing doesn't work for some reason
 			echo "${green}Writing configuration file...$end"
 			echo -e "[Match]\\nName=$interface\\n[Network]\\nDHCP=yes" >> /etc/systemd/network/wired-network.network
-			# heck ye, oneliners
 			
 			echo "${green}Enabling services...$end"
 			systemctl enable systemd-networkd systemd-resolved || exit
@@ -607,37 +524,24 @@ while true; do
 	case "$swap" in
 		y | yes )
 			while true; do
-			read -p "Swapfile size (in MiB) [1024]: " swapsize
-				case "$swapsize" in
-					"" ) 
-						# btrfs stuff
-						case "$filesystem" in
-							b | btrfs )
-								truncate -s 0 /swapfile || exit
-								chattr +C /swapfile || exit
-								btrfs property set /swapfile compression none || exit
-								;;
-						esac
-						
-						echo "${green}Making Swap...$end"
-						dd if=/dev/zero of=/swapfile bs=1M count="$swapsize" status=progress || exit
-						chmod 600 /swapfile
-						mkswap /swapfile
-						swapon /swapfile
-						echo "/swapfile none swap defaults 0 0" >> /etc/fstab
-						
-						break
-						;;
+			read -p "Swapfile size (in MB) [2000]: " swapsize
+			if [[ "$swapsize" == "" ]]; then swapsize=2000; fi
+			case "$swapsize" in
+				*[!0-9]* )
+					echo "Value not a number!"
+					echo 
+					;;
+				* )
+					echo "${green}Making Swap...$end"
+					mkswap -U clear --size "$swapsize"M --file /swapfile || exit
+					swapon /swapfile
+					echo "/swapfile none swap defaults 0 0" >> /etc/fstab
 					
-					*[!0-9]* )
-						echo "Value not a number!"
-						echo 
-						;;
-					* ) break ;;
-				esac
-				
+					break
+					;;
+			esac
+			
 			done # while loop
-			swapstuff
 			break
 			;;	
 		
@@ -651,56 +555,29 @@ echo
 # microcode stuff
 echo "${green}Installing the CPU microcode...$end"
 while true; do
-	autocomplete amd intel skip
+	autocomplete amd intel
 	read -ep "${blue}Intel$end or ${red}AMD$end CPU? " cpu
 	echo
 	case "$cpu" in
 		a | amd ) pacman -S amd-ucode --noconfirm || exit; break ;;
 		i | intel ) pacman -S intel-ucode --noconfirm || exit; break ;;
-		skip ) echo "Skipping..."; break ;;
+		skip ) echo "Skipping..."; break ;; # secret option
 		* )	invalidoption ;;
 	esac
-	
-done # while loop
+done
 
 echo
 
 # bootloader
-echo "${green}Installing GRUB...$end"
+echo "${green}Installing rEFInd...$end"
 echo
-pacman -S grub --noconfirm || exit
+pacman -S refind --noconfirm || exit
+refind-install
 
-echo
-
-# extra stuff needed for LUKS
-if [[ "$luks" == true ]]; then
-	echo "${green}Doing LUKS stuff...$end"
-	
-	rootuuid="$(lsblk -rno name,uuid | grep $oldrootpartition | cut -d' ' -f2)"
-	sed -i 's/#GRUB_ENABLE_CRYPTODISK/GRUB_ENABLE_CRYPTODISK/g' /etc/default/grub
-	sed -i "s/GRUB_CMDLINE_LINUX_DEFAULT=\"/GRUB_CMDLINE_LINUX_DEFAULT=\"cryptdevice=UUID=$rootuuid:cryptroot /g" /etc/default/grub
-
-	# also does it on the comment but ehh
-	sed -i 's/autodetect/autodetect keyboard keymap /g' /etc/mkinitcpio.conf
-	sed -i 's/block/block encrypt /g' /etc/mkinitcpio.conf
-
-	mkinitcpio -P || exit
-	echo
-fi
-
-# different installation methods based on the boot mode
-if [[ -n "$uefi" ]]; then
-	pacman -S efibootmgr --noconfirm || exit
-	echo
-	grub-install --target=x86_64-efi --efi-directory=/efi --bootloader-id=GRUB || exit
-else grub-install /dev/"$disk" || exit
-fi
+# refind config stuff because it does it wrong
+echo "\"Boot using default options\"     \"root=/dev/$rootpartition rw\"" > /boot/refind_linux.conf
 
 echo
-
-echo "${green}Writing GRUB configuration file...$end"
-echo
-grub-mkconfig -o /boot/grub/grub.cfg || exit
 
 EOF
 # END OF SCRIPT 2
@@ -726,11 +603,8 @@ echo
 sleep 1
 
 # unmount the filesystems
-echo "${green}Unmounting filesystem/s...$end"
+echo "${green}Unmounting filesystems...$end"
 umount -R "$mountpoint"
-
-# luks stuff
-if [[ "$luks" == true ]]; then cryptsetup close /dev/"$encrootpartition"; fi
 
 echo
 
